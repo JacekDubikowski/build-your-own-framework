@@ -1,0 +1,58 @@
+@startuml
+interface BeanDefinition<T> {
+ T create(BeanProvider beanProvider)
+ Class<T> type()
+}
+
+class BeanA
+class BeanB
+class BeanC
+
+class $BeanA$Definition {
+    provider : ScopeProvider<BeanA>
+}
+class $BeanB$Definition {
+    provider : ScopeProvider<BeanB>
+}
+class $BeanC$Definition {
+    provider : ScopeProvider<BeanC>
+}
+
+$BeanA$Definition --> BeanA : publishes definition
+$BeanB$Definition --> BeanB : publishes definition
+$BeanC$Definition --> BeanC : publishes definition
+
+BeanDefinition <|-- $BeanA$Definition
+BeanDefinition <|-- $BeanB$Definition
+BeanDefinition <|-- $BeanC$Definition
+
+interface ScopeProvider<T> {
+    T apply(BeanProvider beanProvider)
+}
+
+class SingletionScopeProvider<T>
+
+SingletionScopeProvider --|> ScopeProvider
+
+class BeanProviderFactory {
+    {static} BeanProvider getInstance(...)
+}
+
+class BaseBeanProvider {
+    T provide(Class<T> beanType)
+
+    Iterable<T> provideAll(Class<T> beanType)
+}
+
+BeanProviderFactory --> BaseBeanProvider : create
+BaseBeanProvider o-- BeanDefinition
+
+class BeanProcessor
+
+note "BeanProcessor writes the source for $BeanA$Definition, $BeanB$Definition, $BeanC$Definition" as N1
+N1 -- BeanProcessor
+N1 -- $BeanA$Definition
+N1 -- $BeanB$Definition
+N1 -- $BeanC$Definition
+@enduml
+

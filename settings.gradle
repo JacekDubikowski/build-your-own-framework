@@ -1,2 +1,6 @@
 rootProject.name = 'build-your-own-framework'
 
+include(
+        ':framework',
+        ':testapp'
+)

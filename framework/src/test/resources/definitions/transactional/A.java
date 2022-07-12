@@ -9,4 +9,14 @@ public class A {
     @Transactional
     void save() {}
 
+    @Transactional
+    int read() {
+        return 1;
+    }
+
+    @Transactional
+    <T> T readGeneric() {
+        return null;
+    }
+
 }

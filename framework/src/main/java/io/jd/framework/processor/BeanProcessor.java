@@ -14,6 +14,7 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 import javax.transaction.Transactional;
@@ -55,14 +56,14 @@ public class BeanProcessor extends AbstractProcessor {
         raiseForStatic(transactionalMethods);
         raiseForFinalMethods(transactionalMethods);
         raiseForFinalClass(transactionalMethods);
-        Map<TypeElement, List<ExecutableElement>> typeToTransactionalMethods = transactionalMethods.stream().collect(groupingBy(element -> (TypeElement) element));
+        Map<TypeElement, List<ExecutableElement>> typeToTransactionalMethods = transactionalMethods.stream().collect(groupingBy(element -> (TypeElement) element.getEnclosingElement()));
         typeToTransactionalMethods.forEach(this::writeTransactional);
     }
 
     private void writeTransactional(TypeElement transactionalType, List<ExecutableElement> transactionalMethods) {
         try {
-            ClassName definedClass = ClassName.get(transactionalType);
-            JavaFile javaFile = new TransactionalInterceptedWriter(definedClass, transactionalMethods).createDefinition();
+            PackageElement packageElement = processingEnv.getElementUtils().getPackageOf(transactionalType);
+            JavaFile javaFile = new TransactionalInterceptedWriter(transactionalType, transactionalMethods, packageElement).createDefinition();
             javaFile.writeTo(processingEnv.getFiler());
         } catch (IOException e) {
             processingEnv.getMessager().printMessage(ERROR, "Failed to write transactional definition of ", transactionalType);

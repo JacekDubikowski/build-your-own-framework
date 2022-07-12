@@ -23,7 +23,7 @@ class BaseBeanProvider implements BeanProvider {
 
     @Override
     public <T> List<T> provideAll(Class<T> beanType) {
-        return definitions.stream().filter(def -> def.type().isAssignableFrom(beanType))
+        return definitions.stream().filter(def -> beanType.isAssignableFrom(def.type()))
                 .map(def -> beanType.cast(def.create(this)))
                 .toList();
     }

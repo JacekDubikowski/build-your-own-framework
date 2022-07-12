@@ -22,7 +22,7 @@ public class TransactionalCreationTest extends AbstractAnnotationProcessorTest {
 
         assertThat(compilation).succeededWithoutWarnings();
         assertThat(compilation).generatedSourceFile("%s.$A$Definition".formatted(PACKAGE_NAME));
-        assertThat(compilation).generatedSourceFile("%s.$A$Intercepted".formatted(PACKAGE_NAME));
+        assertThat(compilation).generatedSourceFile("%s.A$Intercepted".formatted(PACKAGE_NAME));
         assertThat(compilation).generatedSourceFile("%s.$A$Intercepted$Definition".formatted(PACKAGE_NAME));
     }
 

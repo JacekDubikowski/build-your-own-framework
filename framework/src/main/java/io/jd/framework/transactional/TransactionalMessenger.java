@@ -1,4 +1,4 @@
-package io.jd.framework.processor;
+package io.jd.framework.transactional;
 
 import javax.annotation.processing.Messager;
 import javax.lang.model.element.Element;
@@ -9,10 +9,10 @@ import java.util.function.Function;
 
 import static javax.tools.Diagnostic.Kind.ERROR;
 
-public class TransactionalMessager {
+class TransactionalMessenger {
     private final Messager messager;
 
-    public TransactionalMessager(Messager messager) {
+    public TransactionalMessenger(Messager messager) {
         this.messager = messager;
     }
 

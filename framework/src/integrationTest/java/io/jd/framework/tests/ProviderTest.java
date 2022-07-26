@@ -8,13 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-public class IntegrationTest {
+class ProviderTest {
 
     @Test
     void shouldCreateDefinitionForServices() {
         assertEquals(new $ServiceA$Definition().type(), ServiceA.class);
         assertEquals(new $ServiceB$Definition().type(), ServiceB.class);
         assertEquals(new $ServiceC$Definition().type(), ServiceC.class);
+        assertEquals(new $RepositoryA$Intercepted$Definition().type(), RepositoryA$Intercepted.class);
+        assertEquals(new $RepositoryA$Definition().type(), RepositoryA.class);
     }
 
     @Test
@@ -42,5 +44,32 @@ public class IntegrationTest {
         ServiceC serviceC = beanProvider.provide(ServiceC.class);
         assertNotNull(serviceC);
         assertInstanceOf(ServiceC.class, serviceC);
+    }
+
+    @Test
+    void shouldProvideExactInstance() {
+        BeanProvider beanProvider = BeanProviderFactory.getInstance();
+
+        RepositoryA repositoryA = beanProvider.provideExact(RepositoryA.class);
+        assertNotNull(repositoryA);
+        assertInstanceOf(RepositoryA.class, repositoryA);
+    }
+
+    @Test
+    void shouldProvideInterceptedInstance() {
+        BeanProvider beanProvider = BeanProviderFactory.getInstance();
+
+        RepositoryA repositoryA = beanProvider.provideExact(RepositoryA$Intercepted.class);
+        assertNotNull(repositoryA);
+        assertInstanceOf(RepositoryA$Intercepted.class, repositoryA);
+    }
+
+    @Test
+    void shouldProvideTransactionalRepository() {
+        BeanProvider beanProvider = BeanProviderFactory.getInstance();
+
+        RepositoryA repositoryA = beanProvider.provide(RepositoryA.class);
+        assertNotNull(repositoryA);
+        assertInstanceOf(RepositoryA$Intercepted.class, repositoryA);
     }
 }

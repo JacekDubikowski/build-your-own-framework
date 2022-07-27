@@ -2,6 +2,7 @@ package io.jd.framework.processor;
 
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
+import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
@@ -10,7 +11,9 @@ import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import io.jd.framework.BeanDefinition;
 import io.jd.framework.BeanProvider;
+import io.jd.framework.ScopeProvider;
 
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import java.util.List;
@@ -36,19 +39,24 @@ class DefinitionWriter {
                 .addSuperinterface(parameterizedBeanDefinition)
                 .addMethod(createMethodSpec())
                 .addMethod(typeMethodSpec())
+                .addField(scopeProvider())
                 .build();
         return JavaFile.builder(definedClassName.packageName(), definitionSpec).build();
     }
 
+    private FieldSpec scopeProvider() {
+        ParameterizedTypeName scopeProviderType = ParameterizedTypeName.get(ClassName.get(ScopeProvider.class), definedClassName);
+        return FieldSpec.builder(scopeProviderType, "provider", Modifier.FINAL, Modifier.PRIVATE)
+                .initializer(constructorInvocation())
+                .build();
+    }
+
     private MethodSpec typeMethodSpec() {
         var classTypeForDefinedTyped = ParameterizedTypeName.get(ClassName.get(Class.class), definedClassName);
-
         return MethodSpec.methodBuilder("type")
                 .addAnnotation(Override.class)
                 .addModifiers(PUBLIC)
-                .addCode(CodeBlock.builder()
-                        .addStatement("return $T.class", definedClass)
-                        .build())
+                .addStatement("return $T.class", definedClass)
                 .returns(classTypeForDefinedTyped)
                 .build();
     }
@@ -58,19 +66,22 @@ class DefinitionWriter {
                 .addAnnotation(Override.class)
                 .addModifiers(PUBLIC)
                 .addParameter(ParameterSpec.builder(BeanProvider.class, "beanProvider").build())
-                .addCode(constructorInvocation(definedClassName))
+                .addStatement("return provider.apply(beanProvider)")
                 .returns(definedClassName)
                 .build();
     }
 
-    private CodeBlock constructorInvocation(TypeName typeName) {
+    private CodeBlock constructorInvocation() {
         var typeNames = constructorParameterTypes.stream().map(TypeName::get).toList();
         var constructorParameters = typeNames.stream().map(this::providerCall)
                 .collect(Collectors.joining(", "));
         return CodeBlock.builder()
-                .add("return new ")
-                .add("$T", typeName)
-                .add("(" + constructorParameters + ");", typeNames.toArray())
+                .add("ScopeProvider.singletonScope(")
+                .add("beanProvider -> ")
+                .add("new ")
+                .add("$T", definedClassName)
+                .add("(" + constructorParameters + ")", typeNames.toArray())
+                .add(")")
                 .build();
     }
 

@@ -1,7 +1,5 @@
 package io.jd.framework.tests;
 
-import io.jd.framework.BeanProvider;
-import io.jd.framework.BeanProviderFactory;
 import jakarta.inject.Singleton;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -11,16 +9,16 @@ import javax.transaction.Transactional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class TransactionalTest {
+class TransactionallyInterceptedTest {
 
-    BeanProvider beanProvider = BeanProviderFactory.getInstance();
-    TestRepository repository = beanProvider.provide(TestRepository.class);
-    NotWiseTransactionalManager manager = beanProvider.provide(NotWiseTransactionalManager.class);
+    TestRepository baseRepository = new TestRepository();
+    NotWiseTransactionalManager manager = new NotWiseTransactionalManager();
+    TestRepository repository = new TestRepository$Intercepted(manager, baseRepository);
 
     @AfterEach
     void tearDown() {
         manager.reset();
-        TestRepository.shouldThrow = false;
+        baseRepository.shouldThrow = false;
     }
 
     @Test
@@ -34,7 +32,7 @@ class TransactionalTest {
 
     @Test
     void shouldCreateTransactionalVersionThatWouldBeginAndRollbackTransactionIfThereWasError() {
-        TestRepository.shouldThrow = true;
+        baseRepository.shouldThrow = true;
 
         assertThrows(RuntimeException.class, () -> repository.transactionalMethod());
 
@@ -55,8 +53,7 @@ class TransactionalTest {
 
 @Singleton
 class TestRepository {
-
-    static volatile boolean shouldThrow = false;
+    boolean shouldThrow = false;
 
     @Transactional
     void transactionalMethod() {

@@ -59,13 +59,13 @@ class ProviderTest {
     void shouldProvideInterceptedInstance() {
         BeanProvider beanProvider = BeanProviderFactory.getInstance();
 
-        RepositoryA repositoryA = beanProvider.provideExact(RepositoryA$Intercepted.class);
+        RepositoryA repositoryA = beanProvider.provide(RepositoryA$Intercepted.class);
         assertNotNull(repositoryA);
         assertInstanceOf(RepositoryA$Intercepted.class, repositoryA);
     }
 
     @Test
-    void shouldProvideTransactionalRepository() {
+    void shouldProvideTransactionallyInterceptedRepositoryWhenProvidingBaseOne() {
         BeanProvider beanProvider = BeanProviderFactory.getInstance();
 
         RepositoryA repositoryA = beanProvider.provide(RepositoryA.class);

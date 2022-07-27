@@ -9,9 +9,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Singleton
 public class NotWiseTransactionalManager implements TransactionManager {
 
-    private static final AtomicInteger beginCounter = new AtomicInteger();
-    private static final AtomicInteger commitCounter = new AtomicInteger();
-    private static final AtomicInteger rollbackCounter = new AtomicInteger();
+    private final AtomicInteger beginCounter = new AtomicInteger();
+    private final AtomicInteger commitCounter = new AtomicInteger();
+    private final AtomicInteger rollbackCounter = new AtomicInteger();
 
     @Override
     public void begin() {

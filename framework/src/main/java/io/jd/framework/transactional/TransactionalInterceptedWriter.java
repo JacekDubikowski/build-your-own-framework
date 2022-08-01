@@ -9,8 +9,11 @@ import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import com.squareup.javapoet.TypeVariableName;
 import io.jd.framework.Intercepted;
+import io.jd.framework.processor.Dependency;
+import io.jd.framework.processor.TypeDependencyResolver;
 import jakarta.inject.Singleton;
 
+import javax.annotation.processing.Messager;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
@@ -19,12 +22,13 @@ import javax.lang.model.type.TypeKind;
 import javax.transaction.TransactionManager;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static javax.lang.model.element.Modifier.PUBLIC;
 
 class TransactionalInterceptedWriter {
     private static final String TRANSACTION_MANAGER = "transactionManager";
-    private static final String DELEGATE = "delegate";
     private static final Modifier[] PRIVATE_FINAL_MODIFIERS = {Modifier.PRIVATE, Modifier.FINAL};
 
     private final TypeElement transactionalElement;
@@ -37,29 +41,35 @@ class TransactionalInterceptedWriter {
         this.packageElement = packageElement;
     }
 
-    public JavaFile createDefinition() {
+    public JavaFile createDefinition(Messager messager) {
         TypeSpec typeSpec = TypeSpec.classBuilder("%s$Intercepted".formatted(transactionalElement.getSimpleName().toString()))
                 .addAnnotation(Singleton.class)
                 .superclass(transactionalElement.asType())
                 .addSuperinterface(TypeName.get(Intercepted.class))
                 .addField(TransactionManager.class, TRANSACTION_MANAGER, PRIVATE_FINAL_MODIFIERS)
-                .addField(TypeName.get(transactionalElement.asType()), DELEGATE, PRIVATE_FINAL_MODIFIERS)
-                .addMethod(constructor())
+                .addMethod(constructor(messager))
                 .addMethod(interceptedTypeMethod())
                 .addMethods(transactionalMethodDefinitions())
                 .build();
         return JavaFile.builder(packageElement.getQualifiedName().toString(), typeSpec).build();
     }
 
-    private MethodSpec constructor() {
+    private MethodSpec constructor(Messager messager) {
+        Dependency dependency = new TypeDependencyResolver().resolve(transactionalElement, messager);
+        var typeNames = dependency.dependencies().stream().map(TypeName::get).toList();
+        var constructorParameters = typeNames.stream()
+                .map(typeName -> ParameterSpec.builder(typeName, "$" + typeNames.indexOf(typeName)).build())
+                .toList();
+        var superCallParams = IntStream.range(0, typeNames.size())
+                .mapToObj(integer -> "$" + integer)
+                .collect(Collectors.joining(", "));
+
         return MethodSpec.constructorBuilder()
-                .addParameters(List.of(
-                        ParameterSpec.builder(TransactionManager.class, TRANSACTION_MANAGER).build(),
-                        ParameterSpec.builder(TypeName.get(transactionalElement.asType()), DELEGATE).build()
-                ))
+                .addParameter(ParameterSpec.builder(TransactionManager.class, TRANSACTION_MANAGER).build())
+                .addParameters(constructorParameters)
                 .addCode(CodeBlock.builder()
-                        .addStatement("this.%s = %s".formatted(TRANSACTION_MANAGER, TRANSACTION_MANAGER))
-                        .addStatement("this.%s = %s".formatted(DELEGATE, DELEGATE))
+                        .addStatement("super($L)", superCallParams)
+                        .addStatement("this.$L = $L", TRANSACTION_MANAGER, TRANSACTION_MANAGER)
                         .build())
                 .build();
     }
@@ -100,7 +110,7 @@ class TransactionalInterceptedWriter {
     private CodeBlock transactionalVoidCall(ExecutableElement method) {
         return CodeBlock.builder()
                 .addStatement(TRANSACTION_MANAGER + ".begin()")
-                .addStatement("$L.$L()", DELEGATE, method.getSimpleName())
+                .addStatement("super.$L()", method.getSimpleName())
                 .addStatement(TRANSACTION_MANAGER + ".commit()")
                 .build();
     }
@@ -109,7 +119,7 @@ class TransactionalInterceptedWriter {
         var methodName = method.getSimpleName();
         return CodeBlock.builder()
                 .addStatement(TRANSACTION_MANAGER + ".begin()")
-                .addStatement("var $LReturnValue = ($L) $L.$L()", methodName, method.getReturnType(), DELEGATE, methodName)
+                .addStatement("var $LReturnValue = ($L) super.$L()", methodName, method.getReturnType(), methodName)
                 .addStatement(TRANSACTION_MANAGER + ".commit()")
                 .addStatement("return $LReturnValue", methodName)
                 .build();

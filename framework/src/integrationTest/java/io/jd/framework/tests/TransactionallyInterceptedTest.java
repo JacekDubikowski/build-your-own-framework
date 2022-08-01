@@ -11,14 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TransactionallyInterceptedTest {
 
-    TestRepository baseRepository = new TestRepository();
     NotWiseTransactionalManager manager = new NotWiseTransactionalManager();
-    TestRepository repository = new TestRepository$Intercepted(manager, baseRepository);
+    TestRepository repository = new TestRepository$Intercepted(manager, new ServiceA());
 
     @AfterEach
     void tearDown() {
         manager.reset();
-        baseRepository.shouldThrow = false;
+        repository.shouldThrow = false;
     }
 
     @Test
@@ -32,7 +31,7 @@ class TransactionallyInterceptedTest {
 
     @Test
     void shouldCreateTransactionalVersionThatWouldBeginAndRollbackTransactionIfThereWasError() {
-        baseRepository.shouldThrow = true;
+        repository.shouldThrow = true;
 
         assertThrows(RuntimeException.class, () -> repository.transactionalMethod());
 
@@ -54,6 +53,12 @@ class TransactionallyInterceptedTest {
 @Singleton
 class TestRepository {
     boolean shouldThrow = false;
+
+    private final ServiceA serviceA;
+
+    TestRepository(ServiceA serviceA) {
+        this.serviceA = serviceA;
+    }
 
     @Transactional
     void transactionalMethod() {

@@ -52,7 +52,7 @@ public class BeanProcessor extends AbstractProcessor {
         var annotated = roundEnv.getElementsAnnotatedWith(Singleton.class);
         var types = ElementFilter.typesIn(annotated);
         var typeDependencyResolver = new TypeDependencyResolver();
-        types.stream().map(t -> typeDependencyResolver.resolve(t, processingEnv))
+        types.stream().map(t -> typeDependencyResolver.resolve(t, processingEnv.getMessager()))
                 .forEach(this::writeDefinition);
     }
 

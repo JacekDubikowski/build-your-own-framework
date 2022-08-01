@@ -72,6 +72,7 @@ public class TransactionalPlugin implements ProcessorPlugin {
         var transactionalType = typeElementListEntry.getKey();
         var transactionalMethods = typeElementListEntry.getValue();
         PackageElement packageElement = processingEnv.getElementUtils().getPackageOf(transactionalType);
-        return new TransactionalInterceptedWriter(transactionalType, transactionalMethods, packageElement).createDefinition();
+        return new TransactionalInterceptedWriter(transactionalType, transactionalMethods, packageElement)
+                .createDefinition(processingEnv.getMessager());
     }
 }

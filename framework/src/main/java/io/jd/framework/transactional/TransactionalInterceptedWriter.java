@@ -91,11 +91,17 @@ class TransactionalInterceptedWriter {
         var methodName = executableElement.getSimpleName().toString();
         var transactionalMethodCall = transactionalMethodCall(executableElement);
         var catchClause = catchClause();
-        return MethodSpec.methodBuilder(methodName).beginControlFlow("try")
-                .addCode(transactionalMethodCall)
+        var methodCode = CodeBlock.builder()
+                .beginControlFlow("try")
+                .add(transactionalMethodCall)
                 .endControlFlow()
-                .addCode(catchClause)
+                .add(catchClause)
+                .build();
+        return MethodSpec.methodBuilder(methodName)
+                .addModifiers(executableElement.getModifiers())
+                .addParameters(executableElement.getParameters().stream().map(ParameterSpec::get).toList())
                 .addAnnotation(Override.class)
+                .addCode(methodCode)
                 .returns(TypeName.get(executableElement.getReturnType()))
                 .addTypeVariables(getTypeVariableIfNeeded(executableElement).stream().toList())
                 .build();
@@ -108,21 +114,27 @@ class TransactionalInterceptedWriter {
     }
 
     private CodeBlock transactionalVoidCall(ExecutableElement method) {
+        var params = translateMethodToSuperCallParams(method);
         return CodeBlock.builder()
                 .addStatement(TRANSACTION_MANAGER + ".begin()")
-                .addStatement("super.$L()", method.getSimpleName())
+                .addStatement("super.$L(%s)".formatted(params), method.getSimpleName())
                 .addStatement(TRANSACTION_MANAGER + ".commit()")
                 .build();
     }
 
     private CodeBlock returningTransactionalMethodCall(ExecutableElement method) {
         var methodName = method.getSimpleName();
+        var params = translateMethodToSuperCallParams(method);
         return CodeBlock.builder()
                 .addStatement(TRANSACTION_MANAGER + ".begin()")
-                .addStatement("var $LReturnValue = ($L) super.$L()", methodName, method.getReturnType(), methodName)
+                .addStatement("var $LReturnValue = ($L) super.$L(%s)".formatted(params), methodName, method.getReturnType(), methodName)
                 .addStatement(TRANSACTION_MANAGER + ".commit()")
                 .addStatement("return $LReturnValue", methodName)
                 .build();
+    }
+
+    private String translateMethodToSuperCallParams(ExecutableElement method) {
+        return method.getParameters().stream().map(variableElement -> variableElement.getSimpleName().toString()).collect(Collectors.joining(", "));
     }
 
     private CodeBlock catchClause() {

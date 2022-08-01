@@ -22,7 +22,7 @@ class TransactionallyInterceptedTest {
 
     @Test
     void shouldCreateTransactionalVersionThatWouldBeginAndCommitTransaction() {
-        repository.transactionalMethod();
+        repository.transactionalMethod(2);
 
         assertEquals(1, manager.beginCounter().get());
         assertEquals(1, manager.commitCounter().get());
@@ -33,7 +33,7 @@ class TransactionallyInterceptedTest {
     void shouldCreateTransactionalVersionThatWouldBeginAndRollbackTransactionIfThereWasError() {
         repository.shouldThrow = true;
 
-        assertThrows(RuntimeException.class, () -> repository.transactionalMethod());
+        assertThrows(RuntimeException.class, () -> repository.transactionalMethod(3));
 
         assertEquals(1, manager.beginCounter().get());
         assertEquals(0, manager.commitCounter().get());
@@ -61,7 +61,7 @@ class TestRepository {
     }
 
     @Transactional
-    void transactionalMethod() {
+    void transactionalMethod(int a) {
         if (shouldThrow) {
             throw new RuntimeException();
         }

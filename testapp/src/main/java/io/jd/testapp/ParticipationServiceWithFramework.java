@@ -13,6 +13,7 @@ public class ParticipationServiceWithFramework implements ParticipationService {
         this.participantRepository = participantRepository;
         this.eventRepository = eventRepository;
     }
+
     @Transactional
     @Override
     public void participate(ParticipantId participantId, EventId eventId) {

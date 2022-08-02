@@ -76,6 +76,8 @@ There at least a few DI framework that widely adopted in Java world.
 Most of them use annotations as one of possible way to configure the bindings. By bindings, I mean, configuration what
 implementations should be used or what should be provided to create objects.
 
+The DI is so popular that there was Java Specification Request for [it](https://jcp.org/en/jsr/detail?id=330). 
+
 Example from [Micronaut documentation](https://docs.micronaut.io/1.0.0/guide/index.html#beans):
 
 ```groovy
@@ -111,3 +113,8 @@ class Vehicle {
 ```
 
 ### Processing of annotations
+
+The most popular Java framework, which is Spring, processes annotations in runtime. 
+All of the dependencies are resolved in runtime and the solution is heavily based on reflection mechanism. 
+This is one of the possible way to handle anntations and if you would like to follow that lead please refer to mentioned before
+ [Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step). 

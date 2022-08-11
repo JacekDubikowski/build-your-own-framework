@@ -73,7 +73,7 @@ class DefinitionWriter {
 
     private CodeBlock constructorInvocation() {
         var typeNames = constructorParameterTypes.stream().map(TypeName::get).toList();
-        var constructorParameters = typeNames.stream().map(this::providerCall)
+        var constructorParameters = typeNames.stream().map(__ -> "beanProvider.provide($T.class)")
                 .collect(Collectors.joining(", "));
         return CodeBlock.builder()
                 .add("ScopeProvider.singletonScope(")
@@ -83,15 +83,5 @@ class DefinitionWriter {
                 .add("(" + constructorParameters + ")", typeNames.toArray())
                 .add(")")
                 .build();
-    }
-
-    private String providerCall(TypeName e) {
-        return isBaseOfInterceptedType(e) ? "beanProvider.provideExact($T.class)" : "beanProvider.provide($T.class)";
-    }
-
-    private boolean isBaseOfInterceptedType(TypeName e) {
-        String possibleInterceptedName = e.withoutAnnotations().toString() + "$Intercepted";
-        String definedObjectCanonicalName = definedClassName.withoutAnnotations().canonicalName();
-        return possibleInterceptedName.equals(definedObjectCanonicalName);
     }
 }

@@ -47,15 +47,6 @@ class ProviderTest {
     }
 
     @Test
-    void shouldProvideExactInstance() {
-        BeanProvider beanProvider = BeanProviderFactory.getInstance();
-
-        RepositoryA repositoryA = beanProvider.provideExact(RepositoryA.class);
-        assertNotNull(repositoryA);
-        assertInstanceOf(RepositoryA.class, repositoryA);
-    }
-
-    @Test
     void shouldProvideInterceptedInstance() {
         BeanProvider beanProvider = BeanProviderFactory.getInstance();
 

@@ -34,22 +34,4 @@ class BaseBeanProvider implements BeanProvider {
         return allBeans.stream().filter(not(bean -> interceptedTypes.contains(bean.getClass()))).toList();
     }
 
-    @Override
-    public <T> T provideExact(Class<T> beanType) {
-        var beans = provideExactAll(beanType);
-        if (beans.isEmpty()) {
-            throw new IllegalStateException("No exact bean of given type: '%s'".formatted(beanType.getCanonicalName()));
-        } else if (beans.size() > 1) {
-            throw new IllegalStateException("More than one bean of exact type: '%s'".formatted(beanType.getCanonicalName()));
-        } else {
-            return beans.get(0);
-        }
-    }
-
-    @Override
-    public <T> List<T> provideExactAll(Class<T> beanType) {
-        return definitions.stream().filter(def -> beanType.equals(def.type()))
-                .map(def -> beanType.cast(def.create(this)))
-                .toList();
-    }
 }

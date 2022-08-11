@@ -317,6 +317,10 @@ class BeanProcessor extends AbstractProcessor { // 1
 1. Our processor will extend the provided *AbstractProcessor* instead of doing full implementation of *Processor
 interface.
 
+The [actual implementation](/framework/src/main/java/io/jd/framework/processor/BeanProcessor.java) differs from what you are seeing. 
+Don't worry, it will be used to full extend in the next **part** of the article. 
+The simplified version shown here is enough to do the actual DI work.
+
 ##### Step 2 - add annotations!?
 
 ```java
@@ -373,7 +377,7 @@ Since now, please assume that all code is included in the BeanProcessor class bo
    In the code there is an example of error message.
 4. There is no need to claim the annotations so the method returns `false`.
 
-##### Part 4 - write the acutal processing
+##### Step 4 - write the acutal processing
 
 ```java
     private void processBeans(RoundEnvironment roundEnv) {
@@ -447,14 +451,190 @@ public class TypeDependencyResolver {
    ```
    [It ain't much, but it's honest work](https://i.kym-cdn.com/entries/icons/original/000/028/021/work.jpg).
    If you are not aware of *Records* please check the [link](https://docs.oracle.com/en/java/javase/14/language/records.html).
+   
+   You may have noticed the strange type [*TypeMirror*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/type/TypeMirror.html).
+   It represents a type in Java language (literally language, as this is compile time thing). 
 
-##### Part 5 - writing definitions
+##### Step 5 - writing definitions
 
 ###### How can I write Java source code?
 
-###### Writing definitions
+To write Java code during annotation processing, you can use anything to be honest. 
+As long as you end up with *CharSequence*/*String*/*byte[]* you are good to go. 
 
-###### Something is missing?
+In the examples you may find in the Internet, it is popular to use *StringBuffer*.
+To be honest, I find it inconvenient to write any source code like that. 
+There is better solution available for us.
+
+[JavaPoet](https://github.com/square/javapoet) is library for writing Java source code using JavaAPI.
+I am not goint to write much about it right now, as you will see it in action in the next section.
+
+###### Missing part of BeanProcessor
+
+Getting back to *BeanProcessor*. Some part of the file were not revealed yet. Let us get back to it:
+```java
+    private void writeDefinition(Dependency dependency) {
+        JavaFile javaFile = new DefinitionWriter(dependency.type(), dependency.dependencies()).createDefinition(); // 1
+        writeFile(javaFile);
+    }
+
+    private void writeFile(JavaFile javaFile) { // 2
+        try {
+            javaFile.writeTo(processingEnv.getFiler());
+        } catch (IOException e) {
+            processingEnv.getMessager().printMessage(ERROR, "Failed to write definition %s".formatted(javaFile));
+        }
+    }
+```
+
+The writing is done in two steps:
+1. Creating actual *BeanDefinition* that is done by *DefinitionWriter* and is contained in JavaFile instance. 
+2. Writing the implementation to the actual file using provided in `processingEnv` [Filer](https://cr.openjdk.java.net/~iris/se/17/latestSpec/api/java.compiler/javax/annotation/processing/Filer.html) instance. 
+   *Filer* is special interface that supports file creation by an annotation processor. 
+   Should writing fail, the compilation will fail and error message will be printed.
+
+The creation of Java code takes place in *DefinitionWriter* and you will see the implementation in a moment.
+However, the question is how should such definition look like. I think that example would serve better than 1000 words.
+
+###### Example of what should be written 
+
+For the below Bean:
+```java
+@Singleton
+public class ServiceC {
+    private final ServiceA serviceA;
+    private final ServiceB serviceB;
+
+    public ServiceC(ServiceA serviceA, ServiceB serviceB) {
+        this.serviceA = serviceA;
+        this.serviceB = serviceB;
+    }
+}
+```
+The definition should look like:
+```java
+public class $ServiceC$Definition implements BeanDefinition<ServiceC> { // 1
+  private final ScopeProvider<ServiceC> provider =  // 2
+          ScopeProvider.singletonScope(beanProvider -> new ServiceC(beanProvider.provide(ServiceA.class), beanProvider.provide(ServiceB.class)));
+
+  @Override
+  public ServiceC create(BeanProvider beanProvider) { // 3
+    return provider.apply(beanProvider);
+  }
+
+  @Override
+  public Class<ServiceC> type() { // 4
+    return ServiceC.class;
+  }
+}
+```
+There are four elements here:
+1. Inconvenient name to prevent people from using it directly. The class should implement `BeanDefinition<BeanType>`.
+2. Field of type *ScopeProvider* that is responsible for instantiation of bean and ensuring its lifetime (scope).
+   Singleton scope is the only scope the framework covers, so the *ScopeProvider.singletonScope()* method will be only used.
+
+   The `Function<BeanProvider, Bean>` that is used to instantiate the bean is passed to the method `ScopeProvider.singletonScope`.
+
+   The implementation of the *ScopeProvider* will be covered later.
+   For now, it is enough to embrace that it will ensure just one instance of the bean in our DI context.
+
+   If you are impatient, the source code is available [here](/framework/src/main/java/io/jd/framework/ScopeProvider.java).
+3. The actual `create` method that uses `provider` and connects it with `beanProvider` through `apply` method.
+4. The implementation of `type` method, which is simple task.
+
+The example shows, the only bean specific thing is type passed to BeanDefinition declaration, `new` call and field/returned types.
+
+###### Implementation of *DefinitionWriter*
+
+Let us see the Java code that writes Java code. Link to the [code](/framework/src/main/java/io/jd/framework/processor/DefinitionWriter.java).
+
+```java
+class DefinitionWriter {
+    private final TypeElement definedClass; // 1
+    private final List<TypeMirror> constructorParameterTypes; // 1
+    private final ClassName definedClassName; // 1
+
+    DefinitionWriter(TypeElement definedClass, List<TypeMirror> constructorParameterTypes) {
+        this.definedClass = definedClass;
+        this.constructorParameterTypes = constructorParameterTypes;
+        this.definedClassName = ClassName.get(definedClass);
+    }
+
+    public JavaFile createDefinition() {
+        ParameterizedTypeName parameterizedBeanDefinition = ParameterizedTypeName.get(ClassName.get(BeanDefinition.class), definedClassName); // 3
+        var definitionSpec = TypeSpec.classBuilder("$%s$Definition".formatted(definedClassName.simpleName())) // 2
+                .addModifiers(PUBLIC) // Making the class public
+                .addSuperinterface(parameterizedBeanDefinition) // 3
+                .addMethod(createMethodSpec()) // 4
+                .addMethod(typeMethodSpec()) // 5
+                .addField(scopeProvider()) // 6
+                .build();
+        return JavaFile.builder(definedClassName.packageName(), definitionSpec).build(); // 7
+    }
+    
+    private MethodSpec createMethodSpec() { // 4
+        return MethodSpec.methodBuilder("create")
+                .addAnnotation(Override.class)
+                .addModifiers(PUBLIC)
+                .addParameter(ParameterSpec.builder(BeanProvider.class, "beanProvider").build())
+                .addStatement("return provider.apply(beanProvider)")
+                .returns(definedClassName)
+                .build();
+    }
+
+    private MethodSpec typeMethodSpec() { // 5
+        var classTypeForDefinedTyped = ParameterizedTypeName.get(ClassName.get(Class.class), definedClassName);
+        return MethodSpec.methodBuilder("type")
+                .addAnnotation(Override.class)
+                .addModifiers(PUBLIC)
+                .addStatement("return $T.class", definedClass)
+                .returns(classTypeForDefinedTyped)
+                .build();
+    }
+
+    private FieldSpec scopeProvider() { // 6
+        ParameterizedTypeName scopeProviderType = ParameterizedTypeName.get(ClassName.get(ScopeProvider.class), definedClassName);
+        return FieldSpec.builder(scopeProviderType, "provider", Modifier.FINAL, Modifier.PRIVATE)
+                .initializer(constructorInvocation())
+                .build();
+    }
+    
+    private CodeBlock constructorInvocation() {
+        var typeNames = constructorParameterTypes.stream().map(TypeName::get).toList();
+        var constructorParameters = typeNames.stream().map(__ -> "beanProvider.provide($T.class)")
+                .collect(Collectors.joining(", "));
+        return CodeBlock.builder()
+                .add("ScopeProvider.singletonScope(")
+                .add("beanProvider -> ")
+                .add("new ")
+                .add("$T", definedClassName)
+                .add("(" + constructorParameters + ")", typeNames.toArray())
+                .add(")")
+                .build();
+    }
+}
+```
+
+Phew, that is a lot. Don't be afraid it's fairly simple.
+1. There are three instance fields. 
+   `TypeElement definedClass` is our bean, 
+   `List<TypeMirror> constructorParameterTypes` contains parameters for bean constructor (who would guess, right?)
+   `ClassName definedClassName` is JavaPoet object, created out of `definedClass` and represents fully qualified name for classes.
+2. *TypeSpec* is JavaPoet class to represent Java type creation (classes and interfaces). 
+   It is created using `classBuilder` static method, in which we pass our strange name, constructed based on the actual bean type name.
+3. `ParameterizedTypeName.get(ClassName.get(BeanDefinition.class), definedClassName)` creates code that represents `BeanDefinition<BeanTypeName>`
+   that is applied as superinterface of our class through `addSuperinterface` method.
+4. The `create()` method implementation not that hard and self-explanatory. Please just look at `createMethodSpec()` method and its application.
+5. The same applies for `type()` method as for the `create()`.
+6. The `scopeProvider()` is similar to the previous methods, however, the tricky part is to invoke constructor. 
+   The `constructorInvocation()` is responsible for creating the constructor invocation. 
+   For every parameter, we just call `BeanProvider.provide` to get the dependency and we keep the order of the constructor parameters.
+   Thankfully, the order is preserved thanks to *List*, *Dependency* and *TypeDependencyResolver* classes and their properties.
+
+Ok, the *BeanDefinition*s are ready. Now, we have to collect them somehow to provide the framework user with their beans.
+
+###### Did we miss something?
+
 Shouldn't have we started with tests of the annotation processor? But how can the annotation processor be tested?
 
 ##### Annotation processor testing
@@ -472,7 +652,7 @@ tests" and *integrationTest* module for "integration tests".
 
 Please refer to [build.gradle](/framework/build.gradle) file from *framework* subproject.
 
-Please refer to [test dir](/framework/src/test/java/) and [integrationTest dir](framework/src/integrationTest/java).
+Please refer to [test dir](/framework/src/test/java) and [integrationTest dir](framework/src/integrationTest/java).
 
 ## Part 4 - Transactions
 

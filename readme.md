@@ -631,7 +631,45 @@ Phew, that is a lot. Don't be afraid it's fairly simple.
    For every parameter, we just call `BeanProvider.provide` to get the dependency and we keep the order of the constructor parameters.
    Thankfully, the order is preserved thanks to *List*, *Dependency* and *TypeDependencyResolver* classes and their properties.
 
-Ok, the *BeanDefinition*s are ready. Now, we have to collect them somehow to provide the framework user with their beans.
+Ok, the *BeanDefinition*s are ready. We just missed the *ScopeProvider*.
+
+###### ScopeProvider implementation
+
+The below code utilize Java's [Sealed Interfaces](https://docs.oracle.com/en/java/javase/15/language/sealed-classes-and-interfaces.html).
+```java
+public sealed interface ScopeProvider<T> extends Function<BeanProvider, T> { // 1
+
+    static <T> ScopeProvider<T> singletonScope(Function<BeanProvider, T> delegate) { // 2
+        return new SingletonProvider<>(delegate);
+    }
+}
+
+final class SingletonProvider<T> implements ScopeProvider<T> { // 3
+    private final Function<BeanProvider, T> delegate;
+    private volatile T value;
+
+    SingletonProvider(Function<BeanProvider, T> delegate) {
+        this.delegate = delegate;
+    }
+
+    public synchronized T apply(BeanProvider beanProvider) {
+        if (value == null) {
+            value = delegate.apply(beanProvider);
+        }
+        return value;
+    }
+}
+```
+1. The sealed interface definition that extends `Function<BeanProvider, T>`. 
+   So the `Function.apply()` method is available.
+2. Factory method for SingletonProvider
+3. Implementation of the SingletonScope, it is based on any kind of lazy value implementation in Java.
+   In the synchronized `apply` method we create the only instance of our bean if there is no one yet.
+   The value field is marked as `volatile` to prevent issues in multithreaded environment.
+
+No we are ready. It is time for runtime part of the framework.
+
+##### Step 6 - runtime provisioning of beans
 
 ###### Did we miss something?
 
@@ -655,6 +693,8 @@ Please refer to [build.gradle](/framework/build.gradle) file from *framework* su
 Please refer to [test dir](/framework/src/test/java) and [integrationTest dir](framework/src/integrationTest/java).
 
 ## Part 4 - Transactions
+
+TBA
 
 ## Afterwords
 

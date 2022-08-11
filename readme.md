@@ -29,9 +29,9 @@ public class App {
 }
 ```
 
-As we can see, the application main method is responsible for providing implementation of interfaces that
+As we can see, the application main method is responsible for providing the implementation of interfaces that
 ParticipationServiceImpl depends on. Furthermore, it must know which ParticipationService implementation should be
-created. The application main method doesn't rely on abstractions for sure.
+created. The application's main method doesn't rely on abstractions for sure.
 
 Can we improve the situation?
 
@@ -44,8 +44,8 @@ By [Wikipedia](https://en.wikipedia.org/wiki/Dependency_inversion_principle) dep
 >
 > B. Abstractions should not depend on details. Details (concrete implementations) should depend on abstractions.
 
-In the previous section, we saw the code that could use some *dependency inversion* (*DI* in shorthand). There is one
-well known design pattern that would make it simple to implement the principle.
+In the previous section, we saw the code that could use some *dependency inversion* (*DI* in shorthand). 
+There is one well-known design pattern that would make it simple to implement the principle.
 
 ### Dependency Injection Principle
 
@@ -53,24 +53,24 @@ well known design pattern that would make it simple to implement the principle.
 > a design pattern in which an object or function receives other objects or functions that it depends on.
 
 But how is it done? The pattern separates object creation from its usage. The required objects are provided ("injected")
-during runtime and the pattern implementation handles the creation of dependencies.
+during runtime and the pattern's implementation handles the creation of dependencies.
 
 *NOTE: Dependency Injection is implementation
 of [Inversion of control](https://www.wikiwand.com/en/Inversion_of_control)!*
 
 ### Available Dependency Injection solutions
 
-There at least a few DI framework that widely adopted in Java world.
+There are at least a few DI frameworks widely adopted in the Java world.
 
-* [Spring](https://spring.io) - dependency injection was initial part of the spring project and still is the core
+* [Spring](https://spring.io) - dependency injection was the initial part of the spring project and still is the core
   concept for framework
 * [Guice](https://github.com/google/guice) - Google's framework just for DI,
 * [Dagger](https://dagger.dev/dev-guide/) - popular in the Android world,
 * [Micronaut](https://micronaut.io) - as part of the framework,
 * [Quarkus](https://quarkus.io/guides/cdi-reference) - as part of the framework.
 
-Most of them use annotations as one of possible way to configure the bindings. By bindings, I mean, configuration what
-implementations should be used or what should be provided to create objects.
+Most of them use annotations as one of the possible ways to configure the bindings. 
+By bindings, I mean, configuration what implementations should be used or what should be provided to create objects.
 
 The DI is so popular that there was Java Specification Request for [it](https://jcp.org/en/jsr/detail?id=330).
 
@@ -108,7 +108,7 @@ class Vehicle {
 }
 ```
 
-In the example we can see the common interface *Engine* with the implementation annotated with *@Singleton*. There is
+In the example, we can see the common interface *Engine* with the implementation annotated with *@Singleton*. There is
 also the *Vehicle* class that is also annotated *@Singleton*. Therefore, you can simply get *Vehicle* instance with
 injected Engine using Micronaut's *BeanContext*. The *V8Engine* will be used for *Engine* implementation as it is the
 only candidate.
@@ -118,49 +118,49 @@ only candidate.
 #### Runtime based
 
 The most popular Java framework, which is Spring, processes annotations in runtime. All dependencies are resolved in
-runtime and the solution is heavily based on reflection mechanism. This is one of the possible way to handle annotations
-and if you would like to follow that lead please refer to mentioned before
+runtime and the solution is heavily based on the reflection mechanism. 
+This is one of the possible ways to handle annotations and if you would like to follow that lead please refer to
 [Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step).
 
 #### Compile based
 
-However, there is the other approach. The dependency injection managed during [*annotation
-processing*](https://www.youtube.com/watch?v=xswPPwYPAFM) that happens in compile time. It has become popular lately
-thanks to Micronaut and Quarkus as they utilize the approach.
+However, there is the other approach. 
+The dependency injection that is managed during [*annotation processing*](https://www.youtube.com/watch?v=xswPPwYPAFM) (happens in compile time).
+It has become popular lately thanks to Micronaut and Quarkus as they utilize the approach.
 
-The annotation processing isn't just for dependency injection and was mainly use for different thing in the past. One
-could recall libraries like [Lombok](https://projectlombok.org) or [MapStruct]() that use the mechanism.
+The annotation processing isn't just for dependency injection and was mainly used for different things in the past. 
+One could recall libraries like [Lombok](https://projectlombok.org) or [MapStruct]() that use the mechanism.
 
 #### Annotation Processor and Processing
 
-The annotation processing is process that happens during compile time. Javac compiler (maybe some other java compilers
-like [Jikes](https://en.wikipedia.org/wiki/Jikes)) can use one or more annotation processors during the compilation. The
-processing can be used for **generating** and **not modifying** files. Additionally, the processing allows one to do
-compile time checks like checking if all fields are final and fail the compilation with proper message.
+The annotation processing is a process that happens during compile time. 
+Javac compiler (maybe some other java compilers like [Jikes](https://en.wikipedia.org/wiki/Jikes)) can use one or more annotation processors during the compilation. 
+The processing can be used for **generating** and **not modifying** files. 
+Additionally, the processing allows one to do compile-time checks like checking if all fields are final and fail the compilation with proper message.
 
-Annotation processor are written in Java and to be used during the compilation, however, the processor must be compiled
+Annotation processors are written in Java and to be used during the compilation, however, the processor must be compiled
 before being used, so it cannot directly process itself. The build tools
 like [Maven](https://maven.apache.org/plugins/maven-compiler-plugin/compile-mojo.html#annotationProcessorPaths)
 or [Gradle](https://docs.gradle.org/4.6/release-notes.html#convenient-declaration-of-annotation-processor-dependencies)
 have support for using the processors.
 
-The processing happens in rounds. In every round the compiler searches for annotated elements. Since Java 8, you can
-basically annotate everything in the program. Then the compiler matches annotated elements to the processors that
+The processing happens in rounds. In every round, the compiler searches for annotated elements. Since Java 8, you can
+annotate almost everything in the program. Then the compiler matches annotated elements to the processors that
 declared being interested in processing them. Any generated files, become input for the next round of the compilation.
 If there are no more files to process the compilation ends.
 
 ### Writing annotation processor
 
-To write annotation processor you must create the implementation
+To write an annotation processor you must create the implementation
 of *[Processor](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/annotation/processing/Processor.html)*
 interface.
 
 The *Processor* defines six methods.
 
-* `void init(ProcessingEnv processingEnv)` - The method in which you can do the initialization of the processor using *
-  processingEnv*. The ProcessingEnv interface provides various utilities to work within annotation processing framework,
-  like *Filer* or *Messager*. Framework guarantees to provide the implementation in the method.
-* `SourceVersion getSupportedSourceVersion()` - As the Javadoc states returns the latest Java version the processor
+* `void init(ProcessingEnv processingEnv)` - The method in which you can do the initialization of the processor using 
+  *processingEnv*. The ProcessingEnv interface provides various utilities to work within the annotation processing framework,
+  like *Filer* or *Messager*. Framework guarantees to provide the implementation as the parameter of the method.
+* `SourceVersion getSupportedSourceVersion()` - As the Javadoc states return the latest Java version the processor
   works with.
 * `Set<String> getSupportedOptions()` - The definition of options that can be passed to processor. We won't use the
   method.
@@ -169,27 +169,27 @@ The *Processor* defines six methods.
 * `Iterable<? extends Completion> getCompletions(Element element, AnnotationMirror annotation, ExecutableElement member, String userText)`
     - The method provides completions for annotations. We are not going to use it.
 * `boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv)` - All the work should be done
-  here. The *annotations* parameter consists of all annotation interfaces that match the supported annotations. The *
-  roundEnv* include information about the current round of processing. The return value tells the compiler if the
+  here. The *annotations* parameter consists of all annotation interfaces that match the supported annotations.  
+  The *roundEnv* includes information about the current round of processing. The return value tells the compiler if the
   processor claimed the annotations that would prevent subsequent processors from working on them or not and subsequent
   processors may work with them.
 
 Fortunately, the creator of the tool prepared for
 us *[AbstractProcessor](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/annotation/processing/AbstractProcessor.html)*
-to extends and simplify our job. However, the API of *AbstractProcessor* is just slightly different and provide some
+to extend and simplify our job. However, the API of *AbstractProcessor* is just slightly different and provides some
 default implementations for the methods.
 
 Once your implementation is ready. You must somehow notify the compiler to use your processor. The `javac` has some
-flags for annotation processing but this is not the way you should work with it. To notify the compiler about processor,
+flags for annotation processing but this is not the way you should work with it. To notify the compiler about the processor,
 you have to specify its name in *META-INF/services/javax.annotation.processing.Processor* file. The name must be fully
-qualified and the file can contain more than one processor. The latter approch works with the build tools. No one builds
+qualified and the file can contain more than one processor. The latter approach works with the build tools. No one builds
 their project using javac, right?
 
 ## Part 3 - Your own DI framework
 
-Note: The annotation processor is a flexible tool. The presented solution highly unlikely to be the only option.
+Note: An annotation processor is a flexible tool. The presented solution is highly unlikely to be the only option.
 
-Here comes the main dish of the repository. We are going to build our DI framework together. As the outcome we would
+Here comes the main dish of the repository. We are going to build our DI framework together. As the outcome, we would
 like to see the below code to work.
 
 ```java
@@ -216,20 +216,20 @@ public class App {
 
 ```
 
-We can see a few in the code. First, we need annotation to point classes to be provided by framework. I made the
-decision to use standardised `jakarta.inject.*` library for annotation and to be more precise just
-the `jakarta.inject.Singleton`. The same as used by *Micronaut*.
+We can see a few in the code. First, we need annotation to point classes to be provided by the framework. 
+I decided to use the standardized `jakarta.inject.*` library for annotation and to be more precise just the `jakarta.inject.Singleton`.
+The same as used by *Micronaut*.
 
 The second thing that we can be sure about is that we need some *BeanProvider*. The frameworks like to call it using
 word `Context` like `ApplicationContext`.
 
-The third think is that we need to have some annotation processor that would allow us to get the instances we expect
-doing most of the work in compile time. The presented code would be perfectly valid for runtime solution too.
+The third thing is that we need to have some annotation processor that would allow us to get the instances we expect
+to do most of the work in compile time. The presented code would be perfectly valid for runtime solutions too.
 
 For the sake of simplicity we would assume the framework:
 
 * handles classes annotated with *@Singleton* that has one constructor only,
-* would utilise singleton scope and each bean will have only one instance,
+* would utilize singleton scope and each bean will have only one instance,
 * doesn't handle the annotation on one of the constructors or static factory method,
 * doesn't
   handle [@Configuration](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/context/annotation/Configuration.html)
@@ -244,19 +244,19 @@ On contrary, the annotation processing approach is both powerful and offers many
 the design is the point where we should start. Even if it turns out to be clumsy, it can be worked on during the
 development.
 
-The below diagram shows the high level architecture of the desired solution.
+The below diagram shows the high-level architecture of the desired solution.
 
 ![Framework "class" diagram](/docs/Framework.png)
 
 As you can see, we need *BeanProcessor* to generate implementations of *BeanDefinition* for each bean. 
 Then the *BeanDefinition*s are picked by *BaseBeanProvider* that implements *BeanProvider*. 
-In the application code we use *BeanProvider* that is created for us by *BeanProviderFactory*. 
-We also use interface *ScopeProvider<T>* that is supposed to handle scope of the bean lifespan.
-In the example we care only for singleton scope.
+In the application code, we use *BeanProvider* that is created for us by *BeanProviderFactory*. 
+We also use interface *ScopeProvider<T>* that is supposed to handle the scope of the bean lifespan.
+In the example, we care only for singleton scope.
 
 ### Implementation
 
-The framework itself is placed in gradle subproject called *framework*.
+The framework itself is placed in the Gradle subproject called *framework*.
 
 #### Basic interfaces
 
@@ -272,7 +272,7 @@ public interface BeanDefinition<T> {
 }
 ```
 
-It has only two methods, `type()` to provider Class object for the bean class and one to build the bean itself.
+It has only two methods, `type()` to provide a *Class* object for the bean class and one to build the bean itself.
 The `create(...)` method accepts *BeanProvider* to get its dependencies needed during build time as it is not supposed
 to create them, hence the dependency injection.
 
@@ -289,9 +289,9 @@ public interface BeanProvider {
 }
 ```
 
-The `provideAll(...)` method provides all beans tht match the parameter `Class<T> beanType`. By match I mean, that the
-given bean is subtype/or is the same type as given `beanType`. The `provide(...)` method is basically the same thing,
-but provide only one matching bean. If there is no or more than one bean, exception is thrown.
+The `provideAll(...)` method provides all beans that match the parameter `Class<T> beanType`. By match I mean, that the
+given bean is subtype/or is the same type as the given `beanType`. The `provide(...)` method is almost the same thing,
+but provides only one matching bean. If there is no or more than one bean, an exception is thrown.
 
 #### Annotation processor
 
@@ -335,15 +335,15 @@ class BeanProcessor extends AbstractProcessor {
 
 }
 ```
-Thanks to usage of *AbstractProcess* we don't have to override some methods. The annotations can be used instead:
+Thanks to the usage of *AbstractProcess* we don't have to override some methods. The annotations can be used instead:
 1. `@SupportedAnnotationTypes` corresponds to *Processor.getSupportedAnnotationTypes* and is used to build the returned value.
-   As defined, the processor care only for `@jakarta.inject.Singleton`.
+   As defined, the processor cares only for `@jakarta.inject.Singleton`.
 2. `@SupportedSourceVersion(SourceVersion.RELEASE_17)` corresponds to *Processor.getSupportedSourceVersion* and is used to build the returned value.
-   The processor would support language up to level of Java 17.
+   The processor would support language up to the level of Java 17.
 
 ##### Step 3 - override the `process` method
 
-Since now, please assume that all code is included in the BeanProcessor class body.
+Now, please assume that the below code is included in the BeanProcessor class body.
 
 ```java
     @Override
@@ -358,23 +358,23 @@ Since now, please assume that all code is included in the BeanProcessor class bo
     }
 ```
 
-1. The `annotations` param provide the set of annotation elements, to be more precise *TypeElement*s.
+1. The `annotations` param provides the set of annotation elements, to be more precise *TypeElement*s.
    It may seem unusual, as everyone is used to *java.lang.Class* or broader *java.lang.reflect.Type*. 
    These are runtime representations. 
 
    On the other hand, there is also compile time representation.
 
    Let me introduce the [*Element* interface](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/element/Element.html) 
-   that is common interface for all language level constructs such as classes, modules, variables, packages etc. 
+   that is the common interface for all language level constructs such as classes, modules, variables, packages etc. 
    It is worth mentioning that there are subtypes corresponding to the constructs like *PackageElement* or [*TypeElement*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/element/TypeElement.html).
    
    The processor code is going to use the *Element*s a lot.
 2. As the processor should catch any exception to log it, we will just provide try and catch here.
    So the actual processing will be provided in the `BeanProcessor.processBeans`.
 3. The annotation processor framework provides the [*Messager*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/annotation/processing/Messager.html) instance to the user through `processingEnv` field of *AbstractProcessor*.
-   The *Messager* is a way to report any errors, warnings etc.  
+   The *Messager* is a way to report any errors, warnings, etc.  
    It defines four overloaded methods `printMessage(...)` and the first parameter of the methods is used to define message type using [Diagnostic.Kind enum](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/tools/Diagnostic.Kind.html).
-   In the code there is an example of error message.
+   In the code, there is an example of an error message.
 4. There is no need to claim the annotations so the method returns `false`.
 
 ##### Step 4 - write the acutal processing
@@ -389,17 +389,17 @@ Since now, please assume that all code is included in the BeanProcessor class bo
     }
 ```
 
-1. First, *RoundEnvironment* is used to provide all element from the compilation round annotated with *@Singleton*.
+1. First, *RoundEnvironment* is used to provide all elements from the compilation round annotated with *@Singleton*.
 2. Then the [*ElementFilter*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/util/ElementFilter.html) is used to get only *TypeElement*s out of `annotated`.
-   It could be wise to fail here, when `annotated` is diffrent in size than `types`, but one can basically annotate anything with *@Singleton*.
+   It could be wise to fail here when `annotated` differs in size from `types`, but one can annotate anything with *@Singleton* and we don't want to handle that.
    Therefore, we won't care for anything other than [*TypeElement*s](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/element/TypeElement.html).
    They represent classes and interfaces elements during compilation.
    
    *ElementFilter* is utility class which filters *Iterable<? extends Element>* or *Set<? extends Element>* to get expected elements with type narrowing to expected *Element* implementation.
-3. As the next step we instantiate *TypeDependencyResolver* which is part of our framework. The class is responsible for getting type element,
+3. As the next step we instantiate *TypeDependencyResolver* which is part of our framework. The class is responsible for getting the type element,
    checking if it has only one constructor and what are the constructor parameters. We would cover its code later on.
 4. Then we resolve our dependencies using *TypeResolver* to be able to build our *BeanDefinition* instance.
-5. The last thing to do is to write Java files definitions that we would cover in Step 5.
+5. The last thing to do is to write Java files with definitions that we would cover in Step 5.
 
 Getting back to TypeDefinitionResolver, the below code shows the implementation:
 
@@ -432,19 +432,19 @@ public class TypeDependencyResolver {
 }
 ```
 
-1. At the beginning the `TypeElement element` is checked for being non abstract class nor interface. 
+1. At the beginning the `TypeElement element` is checked for being a non-abstract class or interface. 
    As the *TypeElement* can represent them too.
-2. In case the `element` is concrete class we follow resolving process.
-3. In case the `element` is not concrete class, we short circuit the process and fail. 
+2. In case the `element` is a concrete class we follow the resolving process.
+3. In case the `element` is not a concrete class, we short circuit the process and fail. 
    The method implementation can be seen [here](framework/src/main/java/io/jd/framework/processor/TypeDependencyResolver.java).
 4. The already known to us *ElementFilter* gets the constructors of the `element`.
 5. There is a check for our `element` having just one constructor.
 6. In case there is just one constructor, we follow the process.
 7. In case there is more than one, the compilation fails.
    The method implementation can be seen [here](framework/src/main/java/io/jd/framework/processor/TypeDependencyResolver.java).
-8. The only constructor is used to create *Dependency* object with element and its dependencies.
+8. The only constructor is used to create *Dependency* object with the element and its dependencies.
    It will be used for writing the actual Java code.
-   I would be beneficial to see the *Dependency* implementation:
+   Seeing the *Dependency* implementation would be beneficial, so please take a look:
    ```java
    public record Dependency(TypeElement type, List<TypeMirror> dependencies) { 
    }
@@ -639,11 +639,11 @@ Shouldn't have we started with tests of the annotation processor? But how can th
 
 ##### Annotation processor testing
 
-The annotation processor is rather poorly prepared for being tested. The one way is to create separate project/Gradle or
+The annotation processor is rather poorly prepared for being tested. One way is to create a separate project/Gradle or
 Maven submodule. It would then use the annotation processor and compilation failure would mean something is wrong. It
 doesn't sound good right?
 
-The other option is to utilise the [compile-testing](https://github.com/google/compile-testing) library created by
+The other option is to utilize the [compile-testing](https://github.com/google/compile-testing) library created by
 Google. It simplifies the testing process, even though the tool isn't perfect. Please find the
 tutorial [here](https://chermehdi.com/posts/compiler-testing-tutorial/).
 
@@ -660,7 +660,7 @@ Please refer to [test dir](/framework/src/test/java) and [integrationTest dir](f
 
 ### My inspiration
 
-The repository is based on the other existing, awesome and fabulous
+The repository is based on the other existing, awesome, and fabulous
 repository [Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step).
 
 Kudos to [Patresss](https://github.com/Patresss)!
@@ -672,7 +672,7 @@ Kudos to Micronaut team for their excellent work!
 
 ### The repository
 
-The repository is meant to be worked on in the future using iterative approach. It is not done yet and I hope that I
+The repository is meant to be worked on in the future using an iterative approach. It is not done yet and I hope that I
 will find the time to develop it further.
 
 The code is neither the best possible nor handling all corner cases. It was never the point to create fully-fledged

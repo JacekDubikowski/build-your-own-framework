@@ -24,6 +24,9 @@ public class ManualTransactionParticipationService implements ParticipationServi
             var participant = participantRepository.getParticipant(participantId);
             var event = eventRepository.findEvent(eventId);
             eventRepository.store(event.addParticipant(participant));
+
+            System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
+
             transactionManager.commit();
         } catch (Exception e) {
             rollback();

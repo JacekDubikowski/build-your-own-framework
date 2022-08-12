@@ -1,6 +1,6 @@
 package io.jd.testapp;
 
-public class App {
+public class NoFrameworkApp {
     public static void main(String[] args) {
         ParticipationService participationService = new ManualTransactionParticipationService(
                 new ParticipantRepositoryImpl(),

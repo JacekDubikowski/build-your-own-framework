@@ -14,10 +14,10 @@ The application consists of
 
 and its goal is to call `participationService.participate(...)`.
 
-It could look like the below code:
+It could look like the below [code](/testapp/src/main/java/io/jd/testapp/NoFrameworkApp.java):
 
 ```java
-public class App {
+public class NoFrameworkApp {
     public static void main(String[] args) {
         ParticipationService participationService = new ManualTransactionParticipationService(
                 new ParticipantRepositoryImpl(),
@@ -671,6 +671,111 @@ No we are ready. It is time for runtime part of the framework.
 
 ##### Step 6 - runtime provisioning of beans
 
+This is the last part for the framework to work. The *BeanProvider* interface has bean already defined. 
+So now we just need the implementation to be do the actual provisioning.
+
+The *BaseBeanProvider* must have access to all instantiated *BeanDefinition*s. 
+Collecting all of them isn't trivial. 
+The *BaseBeanProvider* shouldn't be responsible for doing and and providing the beans.
+
+###### BeanProviderFactory
+
+Due to the fact BeanProviderFactory was created to take the responsibility in `static BeanProvider getInstance(String... packages)`.
+Where packages define places to look for the *BeanDefinition*s.
+This is the code:
+
+```java
+public class BeanProviderFactory {
+
+    private static final QueryFunction<Store, Class<?>> TYPE_QUERY = SubTypes.of(BeanDefinition.class).asClass(); // 2
+
+    public static BeanProvider getInstance(String... packages) { // 1
+        ConfigurationBuilder reflectionsConfig = new ConfigurationBuilder() // 3
+                .forPackages("io.jd") // 3
+                .forPackages(packages); // 3
+        var reflections = new Reflections(reflectionsConfig); // 4
+        var definitions = definitions(reflections); // 5
+        return new BaseBeanProvider(definitions); // 7
+    }
+
+    private static List<? extends BeanDefinition<?>> definitions(Reflections reflections) { // 5
+        return reflections
+                .get(TYPE_QUERY)
+                .stream()
+                .map(BeanProviderFactory::getInstance)                                      // 6
+                .toList();                                                                  
+    }
+
+    private static BeanDefinition<?> getInstance(Class<?> e) { // 6
+        try {
+            return (BeanDefinition<?>) e.getDeclaredConstructors()[0].newInstance();
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException ex) {
+            throw new FailedToInstantiateBeanDefinitionException(e, ex);
+        }
+    }
+}
+```
+1. The mention method to get instance of BeanProvider.
+2. Here it gets interesting. I define constant `TYPE_QUERY` with a very specific type. 
+   This is the type from [Reflections library](https://github.com/ronmamo/reflections).
+   The project README.md defines it as:
+   > Reflections scans and indexes your project's classpath metadata, allowing reverse transitive query of the type system on runtime.
+   
+   I encourage you to read more about it, but I will just explain how it is used in the code.
+   The defined *QueryFunction* will be used to scan the classpath in runtime to find all subtypes of *BeanDefinition*.
+3. The configuration is created for *Reflections* object. It will be used in the next part of code.
+   The configuration defines that the `io.jd` package and provided packages should be scanned.
+4. The creation of *Reflections* object that is responsible for performing our query in next part of the code.
+5. Usage of `Reflection reflections` to perform the `TYPE_QUERY` in runtime.
+   It will create all the BeanDefinition instances using `static BeanDefinition<?> getInstance(Class<?> e)`
+6. The method that creates instance of *BeanDefinition* using the reflection.
+   In case of exception in wraps it in custom RuntimeException. Code of the exception is [here](/framework/src/main/java/io/jd/framework/FailedToInstantiateBeanDefinitionException.java).
+7. Creating the instance of *BeanDefinition* in form of BaseBeanProvider which source will be present in next few paragraphs.
+
+###### BaseBeanProvider
+
+So, how does the *BaseBeanProvider* is implemented? It is easy to embrace.
+The actual code in the repository is very similar, but (**Spoiler alert!**) changed to handle `@Transactional` in [Part 4](#Part-4---Transactions).
+```java
+class BaseBeanProvider implements BeanProvider {
+    private final List<? extends BeanDefinition<?>> definitions;
+
+    public BaseBeanProvider(List<? extends BeanDefinition<?>> definitions) {
+        this.definitions = definitions;
+    }
+
+    @Override
+    public <T> List<T> provideAll(Class<T> beanType) { // 1
+        return definitions.stream().filter(def -> beanType.isAssignableFrom(def.type()))
+                .map(def -> beanType.cast(def.create(this)))
+                .toList();
+    }
+    
+    @Override
+    public <T> T provide(Class<T> beanType) { // 2
+        var beans = provideAll(beanType);     // 2
+        if (beans.isEmpty()) { // 3
+            throw new IllegalStateException("No bean of given type: '%s'".formatted(beanType.getCanonicalName()));
+        } else if (beans.size() > 1) { // 4
+            throw new IllegalStateException("More than one bean of given type: '%s'".formatted(beanType.getCanonicalName()));
+        } else {
+            return beans.get(0); // 5
+        }
+    }
+}
+```
+
+1. `provideAll(Class<T> beanType)` takes all of the BeanDefinition and find all whose `type()` method returns `Class<?>` that is 
+   subtype or exactly provided `beanType`.
+2. `provide(Class<T> beanType)` is also simple. It reuses the `provideAll` method and then takes all matching beans
+3. to check if there is any bean matching the `beanType` and throws exception if not
+4. to check if there are more than one beans matching the `beanType` and throw exception if yes
+5. If there is just one matching bean it is returned.
+
+**This is it!**
+
+We got all the parts, now we should check if it works.
+
 ###### Did we miss something?
 
 Shouldn't have we started with tests of the annotation processor? But how can the annotation processor be tested?
@@ -692,9 +797,97 @@ Please refer to [build.gradle](/framework/build.gradle) file from *framework* su
 
 Please refer to [test dir](/framework/src/test/java) and [integrationTest dir](framework/src/integrationTest/java).
 
+##### Step 7 - working framework
+
+In the beginning there was [*NoFrameworkApp*](/testapp/src/main/java/io/jd/testapp/NoFrameworkApp.java):
+
+```java
+public class NoFrameworkApp {
+    public static void main(String[] args) {
+        ParticipationService participationService = new ManualTransactionParticipationService(
+                new ParticipantRepositoryImpl(),
+                new EventRepositoryImpl(),
+                new TransactionalManagerStub()
+        );
+        participationService.participate(new ParticipantId(), new EventId());
+    }
+}
+```
+If the main is run we got the three lines printed:
+
+```shell
+Begin transaction
+Participant: 'Participant[]' takes part in event: 'Event[]'
+Commit transaction
+```
+
+So how would it look like with [*FrameworkApp*](/testapp/src/main/java/io/jd/testapp/FrameworkApp.java):
+```java
+public class FrameworkApp {
+    public static void main(String[] args) {
+        BeanProvider provider = BeanProviderFactory.getInstance();
+        ParticipationService participationService = provider.provide(ParticipationService.class);
+        participationService.participate(new ParticipantId(), new EventId());
+    }
+}
+```
+
+However, to make it work we have to add *@Singleton* here and there, please refer to source code in [directory](/testapp/src/main/java/io/jd/testapp).
+If we run that main we will get the same result:
+
+```shell
+Begin transaction
+Participant: 'Participant[]' takes part in event: 'Event[]'
+Commit transaction
+```
+
+Therefore, we can call it **success**.
+The code is much simpler and it relies only on the abstractions.
+
+##### That's it?
+
+If you check the result of running either of mains you will see that there is a beginning of transaction and commit. 
+If you check the [*ManualTransactionParticipationService*](/testapp/src/main/java/io/jd/testapp/ManualTransactionParticipationService.java) source code you will read:
+
+```java
+@Singleton
+public class ManualTransactionParticipationService implements ParticipationService {
+    ...
+    @Override
+    public void participate(ParticipantId participantId, EventId eventId) {
+        try {
+            transactionManager.begin();
+            var participant = participantRepository.getParticipant(participantId);
+            var event = eventRepository.findEvent(eventId);
+            eventRepository.store(event.addParticipant(participant));
+
+            System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
+
+            transactionManager.commit();
+        } catch (Exception e) {
+            rollback();
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void rollback() {
+        try {
+            transactionManager.rollback();
+        } catch (SystemException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+Doing the work with *TransactionalManager* seems to be tedious. 
+Calling `begin`, `commit` or `rollback` and handling exceptions seems like very cross-cutting concern having nothing to do with our service logic.
+
+So, maybe the framework can handle it too?
+
 ## Part 4 - Transactions
 
-TBA
+Work in progress.
 
 ## Afterwords
 

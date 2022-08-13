@@ -2,11 +2,14 @@ package io.jd.framework.tests;
 
 import io.jd.framework.BeanProvider;
 import io.jd.framework.BeanProviderFactory;
+import notio.notjd.ExternalService;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProviderTest {
 
@@ -62,5 +65,21 @@ class ProviderTest {
         RepositoryA repositoryA = beanProvider.provide(RepositoryA.class);
         assertNotNull(repositoryA);
         assertInstanceOf(RepositoryA$Intercepted.class, repositoryA);
+    }
+
+    @Test
+    void shouldNotProvideBeanWhichPackageIsNotScanned() {
+        BeanProvider beanProvider = BeanProviderFactory.getInstance();
+
+        var result = beanProvider.provideAll(ExternalService.class);
+        assertTrue(result.isEmpty(), "Should not provide the bean which package is not scanned for BeanDefinitions");
+    }
+
+    @Test
+    void shouldProvideBeanWhichPackageIsNotScanned() {
+        BeanProvider beanProvider = BeanProviderFactory.getInstance("notio.notjd");
+
+        var result = beanProvider.provideAll(ExternalService.class);
+        assertFalse(result.isEmpty(), "Should provide the bean which package is was explicitly provided to be scanned for BeanDefinitions");
     }
 }

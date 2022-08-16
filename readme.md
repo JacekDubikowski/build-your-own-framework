@@ -2,23 +2,26 @@
 
 ## Introduction
 
-You would love to build an application that provides some simple logic.
+You would love to build a complex application, but for simplicity, we build one which provides simple logic.
 The application consists of
 
-* ParticipationService and ManualTransactionParticipationService
-* EventRepository and EventRepositoryImpl
-* ParticipantRepository and ParticipantRepositoryImpl
-* Event and EventId
-* Participant and ParticipantId
+* *ParticipationService* and *ManualTransactionParticipationService*
+* *EventRepository* and *EventRepositoryImpl*
+* *ParticipantRepository* and *ParticipantRepositoryImpl*
+* *Event* and *EventId*
+* *Participant* and *ParticipantId*
 
-The application is going to be quite simple.
-So maybe you can skip using frameworks?
+The application is responsible for assigning participants to events.
+
+To write an application like that you would probably use a framework.
+However, maybe you can skip using the framework?
 
 ## Part 1 - Problem
 
 ### No framework at all
 
-In the real world, you probably won't use the main method for the application. 
+In the real world, you probably won't use the main method for the application.
+The logic will be stored in the domain code.
 However, we will use the main method to keep things simple.
 
 The main method of the mentioned application could look like the below [code](/testapp/src/main/java/io/jd/testapp/NoFrameworkApp.java):
@@ -36,9 +39,9 @@ public class NoFrameworkApp {
 }
 ```
 
-As we can see, the application's main method is responsible for providing the implementation of interfaces that
-ParticipationServiceImpl depends on. Furthermore, it must know which ParticipationService implementation should be
-created. The application's main method doesn't rely on abstractions for sure. 
+As we can see, the application's main method is responsible for providing the implementation of interfaces that *ManualTransactionParticipationService* depends on. 
+Furthermore, it must know which ParticipationService implementation should be created. 
+The application's main method doesn't rely on abstractions for sure. 
 It is also responsible for creating the needed implementations.
 
 Can we improve the situation?
@@ -47,23 +50,26 @@ Can we improve the situation?
 
 ### Dependency Inversion Principle
 
-By [Wikipedia](https://en.wikipedia.org/wiki/Dependency_inversion_principle) dependency inversion principle states that:
+By [Wikipedia](https://en.wikipedia.org/wiki/Dependency_inversion_principle), the dependency inversion principle states that:
 
 > A. High-level modules should not import anything from low-level modules. Both should depend on abstractions (e.g., interfaces).
 >
 > B. Abstractions should not depend on details. Details (concrete implementations) should depend on abstractions.
 
-In the previous section, we saw the code that could use some *dependency inversion* (*DI* in shorthand). 
+In the previous section, we saw the code that could use some *dependency inversion*. 
 There is one well-known design pattern that would make it simple to implement the principle.
 
-### Dependency Injection Principle
+### Dependency Injection Pattern
 
 [Wikipedia](https://en.wikipedia.org/wiki/Dependency_injection) describes *Dependency Injection* as
 
 > a design pattern in which an object or function receives other objects or functions that it depends on.
 
-But how is it done? The pattern separates object creation from its usage. The required objects are provided ("injected")
-during runtime and the pattern's implementation handles the creation of dependencies.
+But how is it done? The pattern separates responsibility for object creation from its usage. 
+The required objects are provided ("injected") during runtime 
+and the pattern's implementation handles the creation and lifecycle of the dependencies.
+
+From now on, the *DI* shorthand stands for dependency injection.
 
 *NOTE: Dependency Injection is the implementation
 of [Inversion of control](https://www.wikiwand.com/en/Inversion_of_control)!*

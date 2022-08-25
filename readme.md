@@ -2,29 +2,32 @@
 
 ## Introduction
 
-You would love to build a complex application, but for simplicity, we build one which provides simple logic.
+Most of the developers in the JVM world work on various web applications.
+Many of them are based on some kind of framework, like Spring or Micronaut.
+This article isn't about if it is feasible to use a framework or not nor when to use it.
+It is about writing your own framework!
+
+Have you ever asked yourself questions like the ones below?
+
+> How does framework work?
+
+> What does the implementation of the framework look like?
+
+> Should I write my own framework to see at least the basis of it?
+
+If yes, then welcome abroad. I will try to answer them.
+If not, you are also welcome, I hope you will find the text interesting.
+
+For sake of simplicity we will use some demo app code.
 The application consists of
 
-* *ParticipationService* and *ManualTransactionParticipationService*
-* *EventRepository* and *EventRepositoryImpl*
-* *ParticipantRepository* and *ParticipantRepositoryImpl*
-* *Event* and *EventId*
-* *Participant* and *ParticipantId*
+* Singular service
+* Two repositories
+* Two POJOs
 
-The application is responsible for assigning participants to events.
+## Part 1 - No framework
 
-To write an application like that, you would probably use a framework.
-However, maybe you can skip using the framework.
-
-## Part 1 - Problem
-
-### No framework at all
-
-In the real world, you probably won’t use the main method for the application. 
-The logic will be stored in the domain code. 
-However, to keep things simple, we will use the main method.
-
-Therefore, the starting point of the mentioned application could look like the below [code](/testapp/src/main/java/io/jd/testapp/NoFrameworkApp.java):
+The starting point of the mentioned application could look like the below [code](/testapp/src/main/java/io/jd/testapp/NoFrameworkApp.java):
 
 ```java
 public class NoFrameworkApp {
@@ -41,23 +44,12 @@ public class NoFrameworkApp {
 
 As we can see, the application's main method is responsible for providing the implementation of interfaces that *ManualTransactionParticipationService* depends on. 
 Furthermore, it must know which ParticipationService implementation it should create.
-It doesn’t rely on abstractions, for sure. 
-It is also responsible for creating the needed implementations.
+In case of the framework usage, the programmers typically don't handle creating instances and dependencies on their own.
+They rely on the core feature of the frameworks - **Dependency Injection**.
 
-Can we improve the situation?
+In the below article I will present a simple implementation of the DI container based on annotation processing.
 
 ## Part 2 - Theory
-
-### Dependency Inversion Principle
-
-By [Wikipedia](https://en.wikipedia.org/wiki/Dependency_inversion_principle), the dependency inversion principle states that:
-
-> A. High-level modules should not import anything from low-level modules. Both should depend on abstractions (e.g., interfaces).
->
-> B. Abstractions should not depend on details. Details (concrete implementations) should depend on abstractions.
-
-In the previous section, we saw the code that could use some *dependency inversion*.
-One well-known design pattern would make it simple to implement the principle.
 
 ### Dependency Injection Pattern
 
@@ -68,6 +60,8 @@ One well-known design pattern would make it simple to implement the principle.
 But how is it done? The pattern separates responsibility for object creation from its usage. 
 The required objects are provided ("injected") during runtime, 
 and the pattern's implementation handles the creation and lifecycle of the dependencies.
+
+It has its advantages and drawbacks, you can read about them [here](https://en.wikipedia.org/wiki/Dependency_injection#Advantages_and_disadvantages).
 
 From now on, the *DI* shorthand stands for dependency injection.
 
@@ -102,30 +96,27 @@ The reflection-based approach is one of the possible ways to handle annotations,
 
 #### Compile based
 
-However, there is the other approach.
-The part of the dependency injection can happen during [*annotation processing*](https://www.youtube.com/watch?v=xswPPwYPAFM) (which happens in compile time).
+However, there is another approach.
+The part of the dependency injection can happen during [*annotation processing*](https://www.youtube.com/watch?v=xswPPwYPAFM).
+It is a process that happens during compile time.
 It has become popular lately thanks to Micronaut and Quarkus as they utilise the approach.
 
 The annotation processing isn't just for dependency injection and served as many different things in the past. 
 One could recall libraries like [Lombok](https://projectlombok.org) or [MapStruct]() that use the mechanism.
 
-#### Annotation Processor and Processing
+#### Annotation Processing and Processors
 
-The annotation processing is a process that happens during compile time. 
-Javac compiler can use one or more annotation processors during the compilation. 
-The processing is meant for **generating** and **not modifying** files.
-Additionally, the processing allows compile-time checks like checking if all fields are final and failing the compilation with the proper message.
+The annotation processing is meant for **generating** and **not modifying** files.
+It can also make some compile-time checks like ensuring that all fields of a class are final.
+The processor can also fail the compilation if needed, providing a rather meaningful error message.
 
-Annotation processors are written in Java and are used during the compilation. 
-However, you must compile the processor first before usage.
-It cannot directly process itself. The build tools
-like [Maven](https://maven.apache.org/plugins/maven-compiler-plugin/compile-mojo.html#annotationProcessorPaths)
-or [Gradle](https://docs.gradle.org/4.6/release-notes.html#convenient-declaration-of-annotation-processor-dependencies)
-have support for using the processors.
+Annotation processors are written in Java and are used by Javac during the compilation. 
+However, you must compile the processor before using it.
+It cannot directly process itself.
 
-The processing happens in rounds. In every round, the compiler searches for annotated elements. Since Java 8, you can
-annotate almost everything in the program. Then the compiler matches annotated elements to the processors that
-declared being interested in processing them. Any generated files become input for the next round of the compilation.
+The processing happens in rounds. In every round, the compiler searches for annotated elements. 
+Then the compiler matches annotated elements to the processors that declared being interested in processing them.
+Any generated files become input for the next round of the compilation.
 If there are no more files to process, the compilation ends.
 
 ##### Seeing it working
@@ -153,28 +144,12 @@ To write an annotation processor, you must create the implementation
 of the *[Processor](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/annotation/processing/Processor.html)*
 interface.
 
-The *Processor* defines six methods.
-
-* `void init(ProcessingEnv processingEnv)` - The method in which you can initialise the processor using 
-  *processingEnv*. The ProcessingEnv interface provides various utilities to work within the annotation processing framework,
-  like *Filer* or *Messager*. Framework guarantees to provide the implementation as the parameter of the method.
-* `SourceVersion getSupportedSourceVersion()` - As the Javadoc states, return the latest Java version the processor
-  works with.
-* `Set<String> getSupportedOptions()` - The definition of options that can be passed to processor. We won't use the
-  method.
-* `Set<String> getSupportedAnnotationTypes()` - Returns annotations that the processor is interested in processing. The
-  way to specify annotation is quite complex. Please refer to Javadocs for deeper knowledge.
-* `Iterable<? extends Completion> getCompletions(Element element, AnnotationMirror annotation, ExecutableElement member, String userText)`
-    - The method provides completions for annotations. We are not going to use it.
-* `boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv)` - All the work should be done
-  here. The *annotations* parameter consists of all annotation interfaces that match the supported annotations.  
-  The *roundEnv* includes information about the current round of processing. The return value tells the compiler if the
-  processor claimed the annotations that would prevent subsequent processors from working on them or not.
-
+The *Processor* defines six methods, which is a lot to implement.
 Fortunately, the tool's creator prepared the
 *[AbstractProcessor](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/annotation/processing/AbstractProcessor.html)*
-to be extended and to simplify our job. However, the API of *AbstractProcessor* is slightly different and provides some
-default implementations for the methods.
+to be extended and to simplify our job.
+The API of *AbstractProcessor* is slightly different than *Processor* and provides some
+default implementations of the methods for us.
 
 Once your implementation is ready, you must somehow notify the compiler to use your processor. The `javac` has some
 flags for annotation processing, but this is not how you should work with it. To notify the compiler about the processor,
@@ -182,11 +157,22 @@ you must specify its name in *META-INF/services/javax.annotation.processing.Proc
 qualified, and the file can contain more than one processor. The latter approach works with the build tools. No one builds
 their project using javac, right?
 
+##### Build tools support
+
+The build tools
+like [Maven](https://maven.apache.org/plugins/maven-compiler-plugin/compile-mojo.html#annotationProcessorPaths)
+or [Gradle](https://docs.gradle.org/4.6/release-notes.html#convenient-declaration-of-annotation-processor-dependencies)
+have support for using the processors.
+
 ## Part 3 - Your own DI framework
+
+As I already mentioned, there is the [Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step) article that covers the runtime annotation processing.
+As a counterpart, I will gladly show the basic compile-time framework. 
+The approach has some advantages over the 'classic' one, you can read more about them [in Micronaut release notes](https://micronaut.io/2018/09/30/micronaut-1-0-rc1-and-the-power-of-ahead-of-time-compilation/#:~:text=REFLECTION%20AND%20MAKING%20JAVA%20FRAMEWORKS%20MORE%20EFFICIENT).
 
 Note: An annotation processor is a flexible tool. The presented solution is highly unlikely to be the only option.
 
-Here comes the main dish of the repository. We are going to build our DI framework together. As an outcome, we would
+Here comes the main meal. We are going to build our DI framework together. As an outcome, we would
 like to see the below code work.
 
 ```java

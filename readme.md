@@ -426,12 +426,24 @@ public class TypeDependencyResolver {
    It will be used for writing the actual Java code.
    Seeing the *Dependency* implementation would be beneficial, so please take a look:
    ```java
-   public record Dependency(TypeElement type, List<TypeMirror> dependencies) { 
+   public final class Dependency {
+       private final TypeElement type;
+       private final List<TypeMirror> dependencies;
+   
+       ...
+   
+       public TypeElement type() {
+           return type;
+       }
+   
+       public List<TypeMirror> dependencies() {
+           return dependencies;
+       }
+       ...
    }
    ```
-   [It ain't much, but it's honest work](https://i.kym-cdn.com/entries/icons/original/000/028/021/work.jpg).
-   If you are not aware of *Records*, please check the [link](https://docs.oracle.com/en/java/javase/14/language/records.html).
    
+   [It ain't much, but it's honest work](https://i.kym-cdn.com/entries/icons/original/000/028/021/work.jpg).
    You may have noticed the strange type [*TypeMirror*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/type/TypeMirror.html).
    It represents a type in Java language (literally language, as this is a compile-time thing). 
 
@@ -625,10 +637,8 @@ Ok, the *BeanDefinition*s are ready. We just missed the *ScopeProvider*.
 
 ###### ScopeProvider implementation
 
-The below code utilises Java's [Sealed Interfaces](https://docs.oracle.com/en/java/javase/15/language/sealed-classes-and-interfaces.html).
-
 ```java
-public sealed interface ScopeProvider<T> extends Function<BeanProvider, T> { // 1
+public interface ScopeProvider<T> extends Function<BeanProvider, T> { // 1
 
     static <T> ScopeProvider<T> singletonScope(Function<BeanProvider, T> delegate) { // 2
         return new SingletonProvider<>(delegate);
@@ -846,50 +856,15 @@ Participant: 'Participant[]' takes part in event: 'Event[]'
 Commit transaction
 ```
 
-Therefore, we can call it a **success**.
-The code is much simpler, and it relies only on abstraction.
+Therefore, we can call it a **success**. 
+The framework **works like charm!**
 
-##### That's it?
+##### What's next?
 
-Once you check the result of running either of the mains, you will see that there are extra messages. 
-They are about the beginning and committing a transaction. 
-The source code of [*ManualTransactionParticipationService*](/testapp/src/main/java/io/jd/testapp/ManualTransactionParticipationService.java) is presented below:
+Once you checked the result of running the code from the previous paragraph, you saw that there are extra messages. 
+They are about the beginning and committing a transaction.
 
-```java
-@Singleton
-public class ManualTransactionParticipationService implements ParticipationService {
-    ...
-    @Override
-    public void participate(ParticipantId participantId, EventId eventId) {
-        try {
-            transactionManager.begin();
-            var participant = participantRepository.getParticipant(participantId);
-            var event = eventRepository.findEvent(eventId);
-            eventRepository.store(event.addParticipant(participant));
-
-            System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
-
-            transactionManager.commit();
-        } catch (Exception e) {
-            rollback();
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void rollback() {
-        try {
-            transactionManager.rollback();
-        } catch (SystemException e) {
-            throw new RuntimeException(e);
-        }
-    }
-}
-```
-
-Doing the work with *TransactionalManager* seems to be tedious. 
-Calling `begin`, `commit`, or `rollback` and handling exceptions seems like a very cross-cutting concern having nothing to do with our service logic.
-
-So, maybe the framework can handle it too?
+Handling the transactions is also typical for frameworks. So I will cover it in the next part.
 
 ## Part 4 - Transactions
 

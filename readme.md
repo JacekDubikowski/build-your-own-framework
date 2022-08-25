@@ -171,7 +171,7 @@ The *Processor* defines six methods.
   The *roundEnv* includes information about the current round of processing. The return value tells the compiler if the
   processor claimed the annotations that would prevent subsequent processors from working on them or not.
 
-Fortunately, the tool's creator prepared
+Fortunately, the tool's creator prepared the
 *[AbstractProcessor](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/annotation/processing/AbstractProcessor.html)*
 to be extended and to simplify our job. However, the API of *AbstractProcessor* is slightly different and provides some
 default implementations for the methods.
@@ -226,21 +226,17 @@ to do most of the work in compile time. The presented code would be perfectly va
 
 For the sake of simplicity, we would assume the framework:
 
-* handles classes annotated with *@Singleton* that has one constructor only,
-* would utilise singleton scope, and each bean will have only one instance,
-* doesn't handle the annotation on one of the constructors or static factory method,
-* doesn't
-  handle [@Configuration](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/context/annotation/Configuration.html)
-  or [@Factory](https://docs.micronaut.io/2.4.3/api/io/micronaut/context/annotation/Factory.html) style classes.
+* handles concrete classes annotated with *@Singleton* that has one constructor only,
+* would utilise singleton scope, and each bean will have only one instance.
 
 ### How should the framework work?
 
 In the reflection-based solution, it would be easy to start coding immediately. 
 The reflection is powerful but limited in options.
 
-On the contrary, the annotation processing approach is both powerful and offers many ways to achieve the goal. Therefore,
-the design is the point where we should start. Even if it turns out to be clumsy, it can be worked on during the
-development.
+On the contrary, the annotation processing approach is both powerful and offers many ways to achieve the goal. 
+Therefore, the design is the point where we should start.
+We will start with a basic version, which we will develop gradually as the article develops.
 
 The below diagram shows the high-level architecture of the desired solution.
 
@@ -407,42 +403,26 @@ Getting back to TypeDefinitionResolver, the below code shows the implementation:
 public class TypeDependencyResolver {
 
     public Dependency resolve(TypeElement element, Messager messager) {
-        return isConcreteClass(element) // 1
-                ? resolveConcreteClass(element, messager) // 2
-                : failOnInvalidElement(element, messager); // 3
+       var constructors = ElementFilter.constructorsIn(element.getEnclosedElements()); // 1
+       return constructors.size() == 1 // 2
+               ? resolveDependency(element, constructors) // 3
+               : failOnTooManyConstructors(element, messager, constructors); // 4
     }
 
-    private Dependency resolveConcreteClass(TypeElement element, Messager messager) {
-        var constructors = ElementFilter.constructorsIn(element.getEnclosedElements()); // 4
-        return constructors.size() == 1 // 5
-                ? resolveDependency(element, constructors) // 6
-                : failOnTooManyConstructors(element, messager, constructors); // 7
-    }
-
-    private boolean isConcreteClass(TypeElement element) {
-        return element.getKind().isClass() && !element.getModifiers().contains(Modifier.ABSTRACT);
-    }
-
-    private Dependency resolveDependency(TypeElement element, List<ExecutableElement> constructors) { // 8
+    private Dependency resolveDependency(TypeElement element, List<ExecutableElement> constructors) { // 5
         ExecutableElement constructor = constructors.get(0);
         return new Dependency(element, constructor.getParameters().stream().map(VariableElement::asType).toList());
     }
-    
     ...
 }
 ```
 
-1. Initially, the `TypeElement element` is checked for being a non-abstract class or interface. 
-   As the *TypeElement* can represent them too.
-2. In case the `element` is a concrete class, we follow the resolving process.
-3. If the `element` is not a concrete class, we short circuit the process and fail.
-   You can see the method implementation [here](framework/src/main/java/io/jd/framework/processor/TypeDependencyResolver.java).
-4. The already known to us *ElementFilter* gets the constructors of the `element`.
-5. There is a check for our `element` having just one constructor.
-6. In case there is just one constructor, we follow the process.
-7. In case there is more than one, the compilation fails.
-   You can see the method implementation [here](framework/src/main/java/io/jd/framework/processor/TypeDependencyResolver.java).
-8. The only constructor is used to create a *Dependency* object with the element and its dependencies.
+1. The already known to us *ElementFilter* gets the constructors of the `element`.
+2. There is a check for our `element` having just one constructor.
+3. In case there is just one constructor, we follow the process.
+4. In case there is more than one, the compilation fails.
+   You can see the `failOnTooManyConstructors` method implementation [here](framework/src/main/java/io/jd/framework/processor/TypeDependencyResolver.java).
+5. The only constructor is used to create a *Dependency* object with the element and its dependencies.
    It will be used for writing the actual Java code.
    Seeing the *Dependency* implementation would be beneficial, so please take a look:
    ```java

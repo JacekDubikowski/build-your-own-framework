@@ -5,17 +5,15 @@
 Most of the developers in the JVM world work on various web applications.
 Many of them are based on some kind of framework, like Spring or Micronaut.
 This article isn't about if it is feasible to use a framework or not nor when to use it.
-It is about writing your own framework!
+It is about writing your framework!
 
 Have you ever asked yourself questions like the ones below?
 
-> How does framework work?
+> How does a framework work?
 
 > What does the implementation of the framework look like?
 
-> Should I write my own framework to see at least the basis of it?
-
-If yes, then welcome abroad. I will try to answer them.
+If yes, then welcome aboard. I will try to answer them.
 If not, you are also welcome, I hope you will find the text interesting.
 
 For sake of simplicity we will use some demo app code.
@@ -47,7 +45,7 @@ Furthermore, it must know which ParticipationService implementation it should cr
 In case of the framework usage, the programmers typically don't handle creating instances and dependencies on their own.
 They rely on the core feature of the frameworks - **Dependency Injection**.
 
-In the below article I will present a simple implementation of the DI container based on annotation processing.
+In the below article I will present a simple implementation of the dependency injection container based on annotation processing.
 
 ## Part 2 - Theory
 
@@ -202,18 +200,20 @@ public class App {
 We can see a few in the code. First, we need annotations for pointing classes to be provided by the framework. 
 I decided to use the standardised `jakarta.inject.*` library for annotation. 
 To be more precise, just the `jakarta.inject.Singleton`.
-The same as used by *Micronaut*.
+The same is used by *Micronaut*.
 
 The second thing we can be sure about is that we need some *BeanProvider*. 
 The frameworks like to call it using the word `Context` like `ApplicationContext`.
 
-The third thing is that we need to have some annotation processor that would allow us to get the instances we expect
-to do most of the work in compile time. The presented code would be perfectly valid for runtime solutions too.
+The third thing is an annotation processor that would process the mentioned annotation(s). 
+It should produce classes that would allow the framework to provision the expected dependencies in runtime.
+
+The framework should use the reflection mechanism as little as possible.
 
 For the sake of simplicity, we would assume the framework:
 
 * handles concrete classes annotated with *@Singleton* that has one constructor only,
-* would utilise singleton scope, and each bean will have only one instance.
+* would utilise singleton scope, and each bean will have only one instance for given *BeanProvider*.
 
 ### How should the framework work?
 
@@ -229,10 +229,10 @@ The below diagram shows the high-level architecture of the desired solution.
 ![Framework "class" diagram](./docs/Framework.png)
 
 As you can see, we need *BeanProcessor* to generate implementations of *BeanDefinition* for each bean. 
-Then the *BeanDefinition*s are picked by *BaseBeanProvider* which implements *BeanProvider*. 
-In the application code, we use *BeanProvider* which is created for us by *BeanProviderFactory*. 
+Then the *BeanDefinition*s are picked by *BaseBeanProvider* which implements [*BeanProvider*](/framework/src/main/java/io/jd/framework/BeanProvider.java) (not in the diagram). 
+In the application code, we use *BaseBeanProvider* which is created for us by *BeanProviderFactory*. 
 We also use the *ScopeProvider<T>* interface that is supposed to handle the scope of the bean lifespan.
-In the example, we care only for singleton scope.
+In the example, as mentioned, we care only for singleton scope.
 
 ### Implementation
 
@@ -531,7 +531,8 @@ The example shows that the only bean-specific thing is the type passed to BeanDe
 
 ###### Implementation of *DefinitionWriter*
 
-Let us see the Java code that writes Java code. Link to the [code](/framework/src/main/java/io/jd/framework/processor/DefinitionWriter.java).
+I will omit *@Override* annotations, access modifiers and constructor to keep the code shorter.
+Let us see the Java code that writes Java code. Link to the full [code](/framework/src/main/java/io/jd/framework/processor/DefinitionWriter.java).
 
 ```java
 class DefinitionWriter {
@@ -539,16 +540,9 @@ class DefinitionWriter {
     private final List<TypeMirror> constructorParameterTypes; // 1
     private final ClassName definedClassName; // 1
 
-    DefinitionWriter(TypeElement definedClass, List<TypeMirror> constructorParameterTypes) {
-        this.definedClass = definedClass;
-        this.constructorParameterTypes = constructorParameterTypes;
-        this.definedClassName = ClassName.get(definedClass);
-    }
-
     public JavaFile createDefinition() {
         ParameterizedTypeName parameterizedBeanDefinition = ParameterizedTypeName.get(ClassName.get(BeanDefinition.class), definedClassName); // 3
         var definitionSpec = TypeSpec.classBuilder("$%s$Definition".formatted(definedClassName.simpleName())) // 2
-                .addModifiers(PUBLIC) // Making the class public
                 .addSuperinterface(parameterizedBeanDefinition) // 3
                 .addMethod(createMethodSpec()) // 4
                 .addMethod(typeMethodSpec()) // 5
@@ -559,8 +553,6 @@ class DefinitionWriter {
     
     private MethodSpec createMethodSpec() { // 4
         return MethodSpec.methodBuilder("create")
-                .addAnnotation(Override.class)
-                .addModifiers(PUBLIC)
                 .addParameter(ParameterSpec.builder(BeanProvider.class, "beanProvider").build())
                 .addStatement("return provider.apply(beanProvider)")
                 .returns(definedClassName)
@@ -570,8 +562,6 @@ class DefinitionWriter {
     private MethodSpec typeMethodSpec() { // 5
         var classTypeForDefinedTyped = ParameterizedTypeName.get(ClassName.get(Class.class), definedClassName);
         return MethodSpec.methodBuilder("type")
-                .addAnnotation(Override.class)
-                .addModifiers(PUBLIC)
                 .addStatement("return $T.class", definedClass)
                 .returns(classTypeForDefinedTyped)
                 .build();
@@ -580,11 +570,11 @@ class DefinitionWriter {
     private FieldSpec scopeProvider() { // 6
         ParameterizedTypeName scopeProviderType = ParameterizedTypeName.get(ClassName.get(ScopeProvider.class), definedClassName);
         return FieldSpec.builder(scopeProviderType, "provider", Modifier.FINAL, Modifier.PRIVATE)
-                .initializer(constructorInvocation())
+                .initializer(singletonScopeInitializer())
                 .build();
     }
     
-    private CodeBlock constructorInvocation() {
+    private CodeBlock singletonScopeInitializer() { // 6
         var typeNames = constructorParameterTypes.stream().map(TypeName::get).toList();
         var constructorParameters = typeNames.stream().map(__ -> "beanProvider.provide($T.class)")
                 .collect(Collectors.joining(", "));
@@ -615,9 +605,8 @@ Phew, that is a lot. Don't be afraid it's fairly simple.
 5. The same applies to `type()` method as for the `create()`.
 6. The `scopeProvider()` is similar to the previous methods. 
    However, the tricky part is to invoke the constructor. 
-   The `constructorInvocation()` is responsible for creating the constructor invocation. 
-   We call `BeanProvider.provide` for every parameter to get the dependency and keep the order of the constructor parameters.
-   Thankfully, the order is preserved thanks to the *List*, *Dependency*, and *TypeDependencyResolver* classes and their properties.
+   The `singletonScopeInitializer()` is responsible for creating constructor call wrapped in `ScopeProvider.singletonScope(beanProvider -> ...`). 
+   We call `BeanProvider.provide` for every parameter to get the dependency and keep the calls in the order of the constructor parameters.
 
 Ok, the *BeanDefinition*s are ready. We just missed the *ScopeProvider*.
 
@@ -793,9 +782,9 @@ tutorial [here](https://chermehdi.com/posts/compiler-testing-tutorial/).
 I introduced both approaches in the article's repository. The *compile-testing* was used for "unit
 tests" and *integrationTest* module for "integration tests".
 
-Please refer to [build.gradle](/framework/build.gradle) file from *framework* subproject.
+Please refer to the [build.gradle](/framework/build.gradle) file from the *framework* subproject.
 
-Please refer to [test dir](/framework/src/test/java) and [integrationTest dir](framework/src/integrationTest/java).
+Please refer to the [test dir](/framework/src/test/java) and [integrationTest dir](framework/src/integrationTest/java).
 
 ##### Step 7 - working framework
 

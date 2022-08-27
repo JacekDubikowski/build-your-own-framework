@@ -44,13 +44,6 @@ class DefinitionWriter {
         return JavaFile.builder(definedClassName.packageName(), definitionSpec).build();
     }
 
-    private FieldSpec scopeProvider() {
-        ParameterizedTypeName scopeProviderType = ParameterizedTypeName.get(ClassName.get(ScopeProvider.class), definedClassName);
-        return FieldSpec.builder(scopeProviderType, "provider", Modifier.FINAL, Modifier.PRIVATE)
-                .initializer(constructorInvocation())
-                .build();
-    }
-
     private MethodSpec typeMethodSpec() {
         var classTypeForDefinedTyped = ParameterizedTypeName.get(ClassName.get(Class.class), definedClassName);
         return MethodSpec.methodBuilder("type")
@@ -71,7 +64,14 @@ class DefinitionWriter {
                 .build();
     }
 
-    private CodeBlock constructorInvocation() {
+    private FieldSpec scopeProvider() {
+        ParameterizedTypeName scopeProviderType = ParameterizedTypeName.get(ClassName.get(ScopeProvider.class), definedClassName);
+        return FieldSpec.builder(scopeProviderType, "provider", Modifier.FINAL, Modifier.PRIVATE)
+                .initializer(singletonScopeInitializer())
+                .build();
+    }
+
+    private CodeBlock singletonScopeInitializer() {
         var typeNames = constructorParameterTypes.stream().map(TypeName::get).toList();
         var constructorParameters = typeNames.stream().map(__ -> "beanProvider.provide($T.class)")
                 .collect(Collectors.joining(", "));

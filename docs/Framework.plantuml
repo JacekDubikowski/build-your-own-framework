@@ -26,12 +26,6 @@ BeanDefinition <|-- $BeanA$Definition
 BeanDefinition <|-- $BeanB$Definition
 BeanDefinition <|-- $BeanC$Definition
 
-interface BeanProvider<T> {
-    T provide(Class<T> beanType)
-
-    Iterable<T> provideAll(Class<T> beanType)
-}
-
 interface ScopeProvider<T> {
     T apply(BeanProvider beanProvider)
 }
@@ -44,15 +38,16 @@ class BeanProviderFactory {
     {static} BeanProvider getInstance(...)
 }
 
+class BaseBeanProvider {
+    T provide(Class<T> beanType)
+
+    Iterable<T> provideAll(Class<T> beanType)
+}
+
 BeanProviderFactory --> BaseBeanProvider : create
-BeanProviderFactory --> BeanProvider : return
 BaseBeanProvider o-- BeanDefinition
-BaseBeanProvider --|> BeanProvider
 
 class BeanProcessor
-abstract class AbstractProcessor
-
-BeanProcessor --|> AbstractProcessor
 
 note "BeanProcessor writes the source for $BeanA$Definition, $BeanB$Definition, $BeanC$Definition" as N1
 N1 -- BeanProcessor

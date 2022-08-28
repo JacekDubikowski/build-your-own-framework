@@ -2,21 +2,14 @@
 
 ## Introduction
 
-Most of the developers in the JVM world work on various web applications.
-Many of them are based on some kind of framework, like Spring or Micronaut.
-This article isn't about if it is feasible to use a framework or not nor when to use it.
-It is about writing your framework!
+Majority of the developers in the JVM world work on various web applications. 
+Most of them are based on some kind of framework, like Spring or Micronaut. 
+However, many people still say the framework is too much of a markup. 
+I decided to see how true such claims are and how much work is necessary to replicate what frameworks provide us with out-of-the-box.
+This article isn’t about whether or not it is feasible to use a framework or when to use it. 
+It is about writing your framework - tinkering is the best way of learning!
 
-Have you ever asked yourself questions like the ones below?
-
-> How does a framework work?
-
-> What does the implementation of the framework look like?
-
-If yes, then welcome aboard. I will try to answer them.
-If not, you are also welcome, I hope you will find the text interesting.
-
-For sake of simplicity we will use some demo app code.
+For the sake of simplicity we will use some demo app code.
 The application consists of
 
 * Singular service
@@ -197,7 +190,7 @@ public class App {
 
 ```
 
-We can see a few in the code. First, we need annotations for pointing classes to be provided by the framework. 
+We can make some assumptions based on the above code. First, we need annotations for pointing classes to be provided by the framework. 
 I decided to use the standardised `jakarta.inject.*` library for annotation. 
 To be more precise, just the `jakarta.inject.Singleton`.
 The same is used by *Micronaut*.
@@ -437,7 +430,7 @@ public class TypeDependencyResolver {
 
 ###### How can I write Java source code?
 
-To write Java code during annotation processing, you can use anything, to be honest.
+To write Java code during annotation processing, you can use almost anything.
 You are good to go as long as you end up with *CharSequence*/*String*/*byte[]*. 
 
 In the examples you may find on the Internet, it is popular to use *StringBuffer*.
@@ -592,10 +585,10 @@ class DefinitionWriter {
 
 Phew, that is a lot. Don't be afraid it's fairly simple.
 
-1. There are three instance fields. 
-   `TypeElement definedClass` is our bean, 
-   `List<TypeMirror> constructorParameterTypes` contains parameters for bean constructor (who would guess, right?)
-   `ClassName definedClassName` is the JavaPoet object, created out of `definedClass` and represents a fully qualified name for classes.
+1. There are three instance fields:
+   * `TypeElement definedClass` is our bean, 
+   * `List<TypeMirror> constructorParameterTypes` contains parameters for bean constructor (who would guess, right?),
+   * `ClassName definedClassName` is the JavaPoet object, created out of `definedClass` and represents a fully qualified name for classes.
 2. *TypeSpec* is JavaPoet class to represent Java type creation (classes and interfaces). 
    It is created using the `classBuilder` static method, in which we pass our strange name, constructed based on the actual bean type name.
 3. `ParameterizedTypeName.get(ClassName.get(BeanDefinition.class), definedClassName)` creates code that represents `BeanDefinition<BeanTypeName>`
@@ -832,11 +825,11 @@ Commit transaction
 ```
 
 Therefore, we can call it a **success**. 
-The framework **works like charm!**
+The framework **works like a charm!**
 
 ##### What's next?
 
-Once you checked the result of running the code from the previous paragraph, you saw that there are extra messages. 
+Once you checked the result of running the code from the previous paragraph, you saw that there were extra messages. 
 They are about the beginning and committing a transaction.
 
 Handling the transactions is also typical for frameworks. So I will cover it in the next part.
@@ -864,7 +857,7 @@ Kudos to Micronaut team for their excellent work!
 The repository is meant to be worked on in the future using an iterative approach. It is not done yet and I hope that I
 will find the time to develop it further.
 
-The code is neither the best possible nor handling all corner cases. It was never the point to create the fully-fledged
+The code is neither the best possible nor handling all corner cases. It was never the point to create a fully-fledged
 framework.
 
 Nevertheless, if you have advice for me, or you have found a bug or would like to see some changes, please create the

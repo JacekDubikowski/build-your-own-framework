@@ -1,20 +1,29 @@
 plugins {
     id 'java'
+    id 'application'
 }
 
-group 'io.jd'
+group 'io.jd.testapp-transactional'
 version '0.0.1'
-
-sourceCompatibility = 17
-targetCompatibility = 17
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
+    implementation(project(":framework"))
+    annotationProcessor(project(":framework"))
+
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+}
+
+ext {
+   javaMainClass = "io.jd.testapp.FrameworkApp"
+}
+
+application {
+    mainClassName = javaMainClass
 }
 
 test {

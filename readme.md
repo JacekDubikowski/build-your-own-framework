@@ -813,13 +813,119 @@ Handling the transactions is also typical for frameworks. I will cover how to ha
 
 ## Part 4 - Transactions
 
-Work in progress.
+The three main Java app frameworks provide support for declarative transactions through annotations.
+
+* [Spring Framework - Understanding the Spring Framework’s declarative transaction implementation](https://docs.spring.io/spring-framework/docs/4.2.x/spring-framework-reference/html/transaction.html#tx-decl-explained)
+* [Micronaut Data](https://micronaut-projects.github.io/micronaut-data/snapshot/guide/#transactions)
+* [Quarkus Transaction Guide](https://quarkus.io/guides/transaction)
+
+So why wouldn't we like to have something like that in our framework?
+The repository **[Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step)** shows how to do it purely in runtime. I would like to show you the compile-time version today. 
+
+The presented code would be heavily inspired by [Micronaut](https://micronaut.io).
+
+### What exactly are we trying to achieve here?
+
+At the end of the previous part we have seen logs for the running app:
+
+```text
+Begin transaction
+Participant: 'Participant[]' takes part in event: 'Event[]'
+Commit transaction
+```
+
+As you can assume, the transaction is already there.
+It is managed by *[TransactionManager]()* instance in [ManualTransactionParticipationService](testapp/src/main/java/io/jd/testapp/ManualTransactionParticipationService.java).
+The `Begin transaction` and `Commit transaction` messages are printed by fake *TransactionManager* implementation called *[TransactionalManagerStub](testapp/src/main/java/io/jd/testapp/TransactionalManagerStub.java)*.
+
+Once we take a look at the *ManualTransactionParticipationService* code:
+
+```java
+@Singleton
+public class ManualTransactionParticipationService implements ParticipationService {
+    private final ParticipantRepository participantRepository;
+    private final EventRepository eventRepository;
+    private final TransactionManager transactionManager;
+
+    public ManualTransactionParticipationService(
+            ParticipantRepository participantRepository,
+            EventRepository eventRepository, TransactionManager transactionManager
+    ) {
+        this.participantRepository = participantRepository;
+        this.eventRepository = eventRepository;
+        this.transactionManager = transactionManager;
+    }
+
+    @Override
+    public void participate(ParticipantId participantId, EventId eventId) {
+        try {
+            transactionManager.begin();
+            var participant = participantRepository.getParticipant(participantId);
+            var event = eventRepository.findEvent(eventId);
+            eventRepository.store(event.addParticipant(participant));
+
+            System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
+
+            transactionManager.commit();
+        } catch (Exception e) {
+            rollback();
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void rollback() {
+        try {
+            transactionManager.rollback();
+        } catch (SystemException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+we see that transaction adds a lot of lines of code. 
+Wouldn't it be easier to write code just like the below:
+
+```java
+@Singleton
+public class DeclarativeTransactionsParticipationService implements ParticipationService {
+    private final ParticipantRepository participantRepository;
+    private final EventRepository eventRepository;
+
+    public DeclarativeTransactionsParticipationService(
+            ParticipantRepository participantRepository, 
+            ventRepository eventRepository
+    ) {
+        this.participantRepository = participantRepository;
+        this.eventRepository = eventRepository;
+    }
+
+    @Override
+    @Transactional
+    public void participate(ParticipantId participantId, EventId eventId) {
+            var participant = participantRepository.getParticipant(participantId);
+            var event = eventRepository.findEvent(eventId);
+            eventRepository.store(event.addParticipant(participant));
+            
+            System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
+    }
+}
+```
+
+Code like that becomes our target for this part of the text.
+We would like to handle transactions just by adding *@Transactional* to the method.
+
+### How is it going to work
+
+First of all, it would be beneficial to have annotation to be used. 
+I would like to use standard one instead writing my own. 
+So I decided to use *@Transactional* and *[TransactionManager]()* interface
 
 ## Afterwords
 
 ### My inspiration
 
-The repository is based on the other existing, awesome, and fabulous
+The repository is based on other existing, awesome, and fabulous
 repository [Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step).
 
 Kudos to [Patresss](https://github.com/Patresss)!

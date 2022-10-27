@@ -43,7 +43,7 @@ public class BeanProcessor extends AbstractProcessor {
     }
 
     private void runPluginsProcessing(RoundEnvironment roundEnv) {
-        plugins.stream().map(processorPlugin -> processorPlugin.process(roundEnv.getElementsAnnotatedWith(processorPlugin.reactsOn())))
+        plugins.stream().map(processorPlugin -> processorPlugin.process(roundEnv.getElementsAnnotatedWith(processorPlugin.reactsTo())))
                 .flatMap(Collection::stream)
                 .forEach(this::writeFile);
     }

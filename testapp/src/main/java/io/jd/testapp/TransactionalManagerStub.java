@@ -1,9 +1,8 @@
 package io.jd.testapp;
 
 import jakarta.inject.Singleton;
-
-import javax.transaction.Transaction;
-import javax.transaction.TransactionManager;
+import jakarta.transaction.Transaction;
+import jakarta.transaction.TransactionManager;
 
 @Singleton
 public class TransactionalManagerStub implements TransactionManager {

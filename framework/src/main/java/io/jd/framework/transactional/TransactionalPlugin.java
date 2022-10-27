@@ -2,6 +2,7 @@ package io.jd.framework.transactional;
 
 import com.squareup.javapoet.JavaFile;
 import io.jd.framework.processor.ProcessorPlugin;
+import jakarta.transaction.Transactional;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -10,7 +11,6 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
-import javax.transaction.Transactional;
 import java.lang.annotation.Annotation;
 import java.util.Collection;
 import java.util.List;
@@ -30,7 +30,7 @@ public class TransactionalPlugin implements ProcessorPlugin {
     }
 
     @Override
-    public Class<? extends Annotation> reactsOn() {
+    public Class<? extends Annotation> reactsTo() {
         return Transactional.class;
     }
 

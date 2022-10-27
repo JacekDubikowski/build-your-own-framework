@@ -12,6 +12,7 @@ import io.jd.framework.Intercepted;
 import io.jd.framework.processor.Dependency;
 import io.jd.framework.processor.TypeDependencyResolver;
 import jakarta.inject.Singleton;
+import jakarta.transaction.TransactionManager;
 
 import javax.annotation.processing.Messager;
 import javax.lang.model.element.ExecutableElement;
@@ -19,7 +20,6 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
-import javax.transaction.TransactionManager;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -90,13 +90,7 @@ class TransactionalInterceptedWriter {
     private MethodSpec generateTransactionalMethod(ExecutableElement executableElement) {
         var methodName = executableElement.getSimpleName().toString();
         var transactionalMethodCall = transactionalMethodCall(executableElement);
-        var catchClause = catchClause();
-        var methodCode = CodeBlock.builder()
-                .beginControlFlow("try")
-                .add(transactionalMethodCall)
-                .endControlFlow()
-                .add(catchClause)
-                .build();
+        var methodCode = tryClause(transactionalMethodCall, catchClause());
         return MethodSpec.methodBuilder(methodName)
                 .addModifiers(executableElement.getModifiers())
                 .addParameters(executableElement.getParameters().stream().map(ParameterSpec::get).toList())
@@ -104,6 +98,15 @@ class TransactionalInterceptedWriter {
                 .addCode(methodCode)
                 .returns(TypeName.get(executableElement.getReturnType()))
                 .addTypeVariables(getTypeVariableIfNeeded(executableElement).stream().toList())
+                .build();
+    }
+
+    private static CodeBlock tryClause(CodeBlock transactionalMethodCall, CodeBlock catchClause) {
+        return CodeBlock.builder()
+                .beginControlFlow("try")
+                .add(transactionalMethodCall)
+                .endControlFlow()
+                .add(catchClause)
                 .build();
     }
 

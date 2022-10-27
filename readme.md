@@ -313,7 +313,7 @@ The annotations can be used instead:
 
 ##### Step 3 - override the `process` method
 
-Please assume that the below code is included in the BeanProcessor class body.
+Please assume that the code below is included in the BeanProcessor class body.
 
 ```java
     @Override
@@ -815,18 +815,18 @@ Handling the transactions is also typical for frameworks. I will cover how to ha
 
 The three main Java app frameworks provide support for declarative transactions through annotations.
 
-* [Spring Framework - Understanding the Spring Framework’s declarative transaction implementation](https://docs.spring.io/spring-framework/docs/4.2.x/spring-framework-reference/html/transaction.html#tx-decl-explained)
-* [Micronaut Data](https://micronaut-projects.github.io/micronaut-data/snapshot/guide/#transactions)
-* [Quarkus Transaction Guide](https://quarkus.io/guides/transaction)
+* [Spring Framework](https://docs.spring.io/spring-framework/docs/4.2.x/spring-framework-reference/html/transaction.html#tx-decl-explained)
+* [Micronaut](https://micronaut-projects.github.io/micronaut-data/snapshot/guide/#transactions)
+* [Quarkus](https://quarkus.io/guides/transaction)
 
 So why wouldn't we like to have something like that in our framework?
-The repository **[Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step)** shows how to do it purely in runtime. I would like to show you the compile-time version today. 
+The repository **[Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step)** shows how to do it purely in runtime. I want to show you the compile-time version today. 
 
-The presented code would be heavily inspired by [Micronaut](https://micronaut.io).
+[Micronaut](https://micronaut.io) has heavily inspired all code examples in this text.
 
-### What exactly are we trying to achieve here?
+### What exactly is declarative transaction support?
 
-At the end of the previous part we have seen logs for the running app:
+At the end of the previous part, we have seen logs for the running app:
 
 ```text
 Begin transaction
@@ -834,11 +834,11 @@ Participant: 'Participant[]' takes part in event: 'Event[]'
 Commit transaction
 ```
 
-As you can assume, the transaction is already there.
-It is managed by *[TransactionManager]()* instance in [ManualTransactionParticipationService](testapp/src/main/java/io/jd/testapp/ManualTransactionParticipationService.java).
-The `Begin transaction` and `Commit transaction` messages are printed by fake *TransactionManager* implementation called *[TransactionalManagerStub](testapp/src/main/java/io/jd/testapp/TransactionalManagerStub.java)*.
+As you can guess, the transaction is already there.
+It is managed by *[TransactionManager](https://jakarta.ee/specifications/transactions/2.0/apidocs/jakarta/transaction/transactionmanager)* instance in [ManualTransactionParticipationService](testapp/src/main/java/io/jd/testapp/ManualTransactionParticipationService.java).
+The `Begin transaction` and `Commit transaction` messages are printed by a fake _TransactionManager_ implementation called *[TransactionalManagerStub](testapp/src/main/java/io/jd/testapp/TransactionalManagerStub.java)*.
 
-Once we take a look at the *ManualTransactionParticipationService* code:
+If we take a look at the *ManualTransactionParticipationService* code:
 
 ```java
 @Singleton
@@ -847,16 +847,9 @@ public class ManualTransactionParticipationService implements ParticipationServi
     private final EventRepository eventRepository;
     private final TransactionManager transactionManager;
 
-    public ManualTransactionParticipationService(
-            ParticipantRepository participantRepository,
-            EventRepository eventRepository, TransactionManager transactionManager
-    ) {
-        this.participantRepository = participantRepository;
-        this.eventRepository = eventRepository;
-        this.transactionManager = transactionManager;
-    }
+   // constructor
 
-    @Override
+   @Override
     public void participate(ParticipantId participantId, EventId eventId) {
         try {
             transactionManager.begin();
@@ -883,8 +876,436 @@ public class ManualTransactionParticipationService implements ParticipationServi
 }
 ```
 
-we see that transaction adds a lot of lines of code. 
-Wouldn't it be easier to write code just like the below:
+We see that the transaction adds lots of boilerplate. 
+Wouldn't it be easier to write code like this:
+
+```java
+@Singleton
+public class DeclarativeTransactionsParticipationService implements ParticipationService {
+    private final ParticipantRepository participantRepository;
+    private final EventRepository eventRepository;
+    
+    // constructor
+
+    @Override
+    @Transactional
+    public void participate(ParticipantId participantId, EventId eventId) {
+            var participant = participantRepository.getParticipant(participantId);
+            var event = eventRepository.findEvent(eventId);
+            eventRepository.store(event.addParticipant(participant));
+            
+            System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
+    }
+}
+```
+
+From one on, being able to write code like that is our target.
+We want to handle transactions by adding the *@Transactional* annotation to the method of our interest.
+
+### The *@Transactional* annotation and *TransactionManager*
+
+First, it would be beneficial to have an annotation to achieve the outcome. As I wanted to use the standard one instead of writing my own, I chose the
+*[@Transactional](https://javadoc.io/static/jakarta.transaction/jakarta.transaction-api/2.0.1/jakarta/transaction/Transactional.html)* annotation and 
+the *[TransactionManager](https://javadoc.io/static/jakarta.transaction/jakarta.transaction-api/2.0.1/jakarta/transaction/TransactionManager.html)* interface 
+from the [Jakarta EE Transactions 2.0 specification](https://jakarta.ee/specifications/transactions/2.0/).
+
+### How is the transactional handling going to work
+
+Once a method is annotated with *@Transactional*, we want the annotation processor to generate transaction handling code.
+For the sake of simplicity, the processor will generate code only for methods of concrete classes.
+
+Since the processor can only generate new code, it will create a subclass of the class with annotated methods. 
+Therefore, the class cannot be final. The methods cannot be final, private or static. 
+Non-annotated methods won’t be touched at all.
+
+To get a better idea, please look at the example below.
+
+For the below class:
+
+```java
+@Singleton
+public class RepositoryA {
+
+    @Transactional
+    void voidMethod() {
+    }
+
+    int intMethod() {
+        return 1;
+    }
+}
+```
+
+The annotation processor should generate the following:
+
+```java
+@Singleton
+class RepositoryA$Intercepted extends RepositoryA {
+  private final TransactionManager transactionManager;
+
+  RepositoryA$Intercepted(TransactionManager transactionManager) {
+    super();
+    this.transactionManager = transactionManager;
+  }
+
+  @Override
+  void voidMethod() {
+    // transaction handling code
+  }
+}
+```
+
+The example presents a simplified version of what will be generated, but you probably get the idea.
+The actual code generation and other issues will be shown later on.
+The generated code will be simple. 
+It won't care about transaction propagation.
+It will wrap checked exceptions into the *RuntimeException* and rethrow them in that form.
+
+The problem is that if you want transactions, you cannot directly create an instance of the class with annotated methods using *new* or any other factory method. 
+You must rely on the framework created in the first part to provide it, as only the generated class will have the expected transactional code.
+
+The only extra thing worth noticing in the example is the generated class name. 
+For the rest of this project, if the annotation processor ever creates replacements for some classes, their names will include the *Intercepted* word.
+
+### Handling @Transactional
+
+As transaction handling is the main subject of this text, we will get straight to it.
+
+Processing the *@Transactional* annotation is not a mandatory part of our framework.
+It should be used based on the user's decision.
+Therefore, the code responsible for it will be called *TransactionalPlugin*, as this is a pluggable feature.
+
+Let's look at the code below
+(the code also is available [here](/framework/src/main/java/io/jd/framework/transactional/TransactionalPlugin.java)).
+
+```java
+public class TransactionalPlugin implements ProcessorPlugin { // 7
+   private TransactionalMessenger transactionalMessenger; // 3
+
+   @Override
+    public Collection<JavaFile> process(Set<? extends Element> annotated) { // 1
+        Set<ExecutableElement> transactionalMethods = ElementFilter.methodsIn(annotated); // 2
+        validateMethods(transactionalMethods); // 3
+        Map<TypeElement, List<ExecutableElement>> typeToTransactionalMethods = transactionalMethods.stream() // 4
+                .collect(groupingBy(element -> (TypeElement) element.getEnclosingElement())); // 4
+        return typeToTransactionalMethods.entrySet()
+                .stream()
+                .map(this::writeTransactional) // 5
+                .toList();
+    }
+
+    private void validateMethods(Set<ExecutableElement> transactionalMethods) { // 3
+        raiseForPrivate(transactionalMethods);
+        raiseForStatic(transactionalMethods);
+        raiseForFinalMethods(transactionalMethods);
+        raiseForFinalClass(transactionalMethods);
+    }
+
+    private JavaFile writeTransactional(Map.Entry<TypeElement, List<ExecutableElement>> typeElementListEntry) { // 5
+        var transactionalType = typeElementListEntry.getKey();
+        var transactionalMethods = typeElementListEntry.getValue();
+        PackageElement packageElement = processingEnv.getElementUtils().getPackageOf(transactionalType);
+        return new TransactionalInterceptedWriter(transactionalType, transactionalMethods, packageElement) // 6
+                .createDefinition(processingEnv.getMessager()); // 6
+    }
+    
+   // more methods ...
+}
+```
+
+Now, it is time for us to dive deeply into the provided source.
+
+1. *Set<? extends Element> annotated* contains all [*Element*s](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/element/Element.html) annotated with *@Transactional*.
+2. In the first step, we filter all methods out of the annotated set of elements using [ElementFilter](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/util/ElementFilter.html).
+3. Then, the annotated elements are validated against the previously mentioned rules.
+   I introduced the utility class *TransactionalMessenger* [(code here)](/framework/src/main/java/io/jd/framework/transactional/TransactionalMessenger.java).
+   Its sole responsibility is to wrap [*Messager*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/annotation/processing/Messager.html) and
+   provide a unified API for raising errors associated with the *@Transactional* processing.
+   Every *raiseForSth* method calls *TransactionalMessenger* providing information about the error.
+   The *raiseForSth* methods' code is skipped to keep the example concise and manageable.
+4. Now, we group the annotated methods by classes that the methods are declared.
+   In *Java*, you can only create a method in a class or interface.
+   However, the plugin accepts only concrete class methods and raises errors for others.
+   Therefore, we can be sure that calling *element.getEnclosingElement(_)* where an element is the 
+   annotated method will return class representation - *[TypeElement](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/element/TypeElement.html)*.
+5. Once we have the mentioned grouping, we can write the code. We need to intercept classes that are 
+   keys in the grouping and write transactional versions of methods that are values of the mapping.
+6. The last part is to write the code. 
+   The logic is stored in *TransactionalInterceptedWriter*, so we can move to see its code.
+7. As the *TransactionalPlugin* must be somehow plugged into our framework workings, the class implements
+   the *ProcessorPlugin* interface. 
+   How it all works will be described after we finish with the transaction handling, as it is not the main topic here.
+
+### Writing the code with *TransactionalInterceptedWriter*
+
+For code generation, I will use the proven [JavaPoet](https://github.com/square/javapoet) library.
+
+The code of the *TransactionalInterceptedWriter* is quite complicated.
+The thing that requires special attention is writing transactional versions of *void* methods and value-returning methods.
+Unfortunately, *Java* language has the *void* type contrary to *Kotlin*, *Scala*, *Rust* and others.
+
+We will get to the mentioned part later. Now let's start with instance fields and constructor.
+
+#### Instance fields and constants
+
+The *Writer* constructor is fairly simple, so it can be omitted.
+
+```java
+class TransactionalInterceptedWriter {
+    private static final String TRANSACTION_MANAGER = "transactionManager";
+    private static final Modifier[] PRIVATE_FINAL_MODIFIERS = {Modifier.PRIVATE, Modifier.FINAL};
+    
+    private final TypeElement transactionalElement; // 1 
+    private final List<ExecutableElement> transactionalMethods; // 2
+    private final PackageElement packageElement; // 3
+}
+```
+
+The constants are fairly simple, and their names are self-explanatory.
+
+The class instance fields are more interesting.
+
+1. The *transactionalElement* stores the *TypeElement* representation of the class with the annotated methods. 
+   The class will be referred to as intercepted class or superclass.
+2. The *transactionalMethods* stores the [*ExecutableElement*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/element/ExecutableElement.html) representation of the annotated methods of the *transactionalElement* class.
+3. The *packageElement* stores the [*PackageElement*](https://docs.oracle.com/en/java/javase/17/docs/api/java.compiler/javax/lang/model/element/PackageElement.html) representation of the package in which *transactionalElement* is defined.
+
+#### Intercepting class definition
+
+We will start with the most high-level thing. Let's see how the intercepting class is written, but without going into details.
+
+```java
+class TransactionalInterceptedWriter {
+    
+    public JavaFile createDefinition(Messager messager) {
+        TypeSpec typeSpec = TypeSpec.classBuilder("%s$Intercepted".formatted(transactionalElement.getSimpleName().toString())) // 1
+                .addAnnotation(Singleton.class) // 2
+                .superclass(transactionalElement.asType()) // 3
+                .addSuperinterface(TypeName.get(Intercepted.class)) // 4
+                .addMethod(interceptedTypeMethod()) // 4
+                .addField(TransactionManager.class, TRANSACTION_MANAGER, PRIVATE_FINAL_MODIFIERS) // 5
+                .addMethod(constructor(messager)) // 6
+                .addMethods(transactionalMethodDefinitions()) // 7
+                .build();
+        return JavaFile.builder(packageElement.getQualifiedName().toString(), typeSpec).build(); // 8
+    }
+    
+}
+```
+
+1. First of all, the class must have a name. 
+   As mentioned before the generated class will be called the old one but with an extra *$Intercepted* part. 
+   For example, *Repository* will be changed into *Repository$Intercepted*. 
+   Therefore, we know that the type before *$* is intercepted by the generated class.
+2. The created class must be annotated with *@Singleton*, so the DI solution from the first part will pick it up.
+3. To fulfil its role, the generated class will extend the class with methods annotated with *@Transactional*.
+   We have already talked about it above.
+4. The class will also implement the *Intercepted* interface, which will be covered later.
+   The interface is related to the provisioning of the intercepted instances.
+   This requires the generated class to implement an extra method.
+   I will describe how it works at the end of the text, as this is unrelated to transactions.
+5. To handle transactions, the class needs a *TransactionalManager* field. 
+   Adding the field is very straightforward.
+6. The class must have a constructor that will call *super(requiredDependencies)* and set the *transactionManager* field.
+7. The class will override the methods annotated in its superclass.
+8. The generated code will be stored in the *JavaFile* object to be written to a real file later.
+
+Now, having the high-level view, we can dive into the details where needed. So let's start with writing the constructor.
+
+#### Constructor
+
+To provide the transactional capability, the constructor must call the constructor of its superclass via the *super* keyword, passing the parameters in the correct order.
+The *transactionManager* field of the intercepting class also must be populated.
+
+```java
+class TransactionalInterceptedWriter {
+
+    private MethodSpec constructor(Messager messager) {
+        Dependency dependency = new TypeDependencyResolver().resolve(transactionalElement, messager); // 1
+        var typeNames = dependency.dependencies().stream().map(TypeName::get).toList(); // 1
+        
+        var constructorParameters = typeNames.stream() // 2
+                .map(typeName -> ParameterSpec.builder(typeName, "$" + typeNames.indexOf(typeName)).build()) // 2
+                .toList();
+        
+        var superCallParams = IntStream.range(0, typeNames.size()) // 3
+                .mapToObj(integer -> "$" + integer) // 3
+                .collect(Collectors.joining(", ")); // 3
+
+        return MethodSpec.constructorBuilder()
+                .addParameter(ParameterSpec.builder(TransactionManager.class, TRANSACTION_MANAGER).build()) // 2
+                .addParameters(constructorParameters) // 2
+                .addCode(CodeBlock.builder()
+                        .addStatement("super($L)", superCallParams) // 3
+                        .addStatement("this.$L = $L", TRANSACTION_MANAGER, TRANSACTION_MANAGER) // 4
+                        .build())
+                .build();
+    }
+}
+```
+
+1. The first thing that is done to create a constructor is finding out what the dependencies of the intercepted class are.
+   To do it in a convenient way, we will reuse [*TypeDependencyResolver*](/framework/src/main/java/io/jd/framework/processor/TypeDependencyResolver.java), created for the DI solution.
+   You can read more about it [here](#step-4---write-the-actual-processing).
+2. Having the dependencies of the superclass, we can create parameters for the constructor.
+   The *transactionManager* is the first parameter, and the rest is provided conveniently as *Type ${position in the constructorParameters list}*.
+3. Having the intercepting class constructor params, we can prepare the content of the *super* call. 
+   Then it can be added to the *super* call in the constructor.
+4. The last thing to do is to also set up the *transactionManager* field.
+
+The generated constructor may look like the code below:
+
+```java
+class TestRepository$Intercepted {
+   TestRepository$Intercepted(TransactionManager transactionManager,
+                              ParticipantRepository $0, 
+                              EventRepository $1) {
+      super($0, $1);
+      this.transactionManager = transactionManager;
+   }
+}
+```
+
+#### Overriding transactional methods
+
+In the case of generating the methods, we will start with an example.
+
+```java
+@Singleton
+class RepositoryA$Intercepted extends RepositoryA { 
+    
+  @Override
+  void voidMethod() {
+    try {
+      transactionManager.begin();
+      super.voidMethod();
+      transactionManager.commit();
+    }
+    catch (Exception e) {
+      try {
+        transactionManager.rollback();
+      }
+      catch (Exception innerException) {
+        throw new RuntimeException(innerException);
+      }
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  int intMethod() {
+    try {
+      transactionManager.begin();
+      var intMethodReturnValue = (int) super.intMethod();
+      transactionManager.commit();
+      return intMethodReturnValue;
+    }
+    catch (Exception e) {
+      try {
+        transactionManager.rollback();
+      }
+      catch (Exception innerException) {
+        throw new RuntimeException(innerException);
+      }
+      throw new RuntimeException(e);
+    }
+  }
+}
+```
+
+*TransactionManager*'s methods are defined with the checked exception.
+Therefore, transactional methods need to include try/catch blocks.
+In the try block, the *begin* and *commit* must be called, as well as a *rollback* in the catch clause.
+If the return type isn't void, the result of *super* method call results must be stored in a variable.
+
+So high-level method to generate such a call looks like this:
+
+```java
+class TransactionalInterceptedWriter {
+   private MethodSpec generateTransactionalMethod(ExecutableElement executableElement) {
+      var methodName = executableElement.getSimpleName().toString();
+      var transactionalMethodCall = transactionalMethodCall(executableElement);
+      var methodCode = tryClause(transactionalMethodCall, catchClause());
+      return MethodSpec.methodBuilder(methodName)
+              .addModifiers(executableElement.getModifiers())
+              .addParameters(executableElement.getParameters().stream().map(ParameterSpec::get).toList())
+              .addAnnotation(Override.class)
+              .addCode(methodCode)
+              .returns(TypeName.get(executableElement.getReturnType()))
+              .addTypeVariables(getTypeVariableIfNeeded(executableElement).stream().toList())
+              .build();
+   }
+}
+```
+
+In this and the previous part of the Readme.md I have shown a lot of code, mostly containing JavaPoet usage. 
+My hope is that now you get how the JavaPoet works. 
+From now on, I will try to minimise the boilerplate JavaPoet code by omitting it in the examples or sharing it as Gists. 
+The full code is still present in the repository, of course.
+
+#### *Catch* and *try* blocks
+
+The try and catch blocks code is quite simple. So as mentioned before, here are the gists:
+
+[https://gist.github.com/JacekDubikowski/167bcaaab151f9d4ad6f033ef1543cec](https://gist.github.com/JacekDubikowski/167bcaaab151f9d4ad6f033ef1543cec)
+
+[https://gist.github.com/JacekDubikowski/8b691faf3e0aba2e04d03211823794ff](https://gist.github.com/JacekDubikowski/8b691faf3e0aba2e04d03211823794ff)
+
+#### Super method calls
+
+Once we have *try* and *catch* blocks handled, we can focus on the actual super method call.
+
+```java
+class TransactionalInterceptedWriter {
+   private CodeBlock transactionalMethodCall(ExecutableElement executableElement) {
+      return executableElement.getReturnType().getKind() == TypeKind.VOID // 1
+              ? transactionalVoidCall(executableElement)
+              : returningTransactionalMethodCall(executableElement);
+   }
+
+   private CodeBlock transactionalVoidCall(ExecutableElement method) { // 2
+      var params = translateMethodToSuperCallParams(method);
+      return CodeBlock.builder()
+              .addStatement(TRANSACTION_MANAGER + ".begin()")
+              .addStatement("super.$L(%s)".formatted(params), method.getSimpleName())
+              .addStatement(TRANSACTION_MANAGER + ".commit()")
+              .build();
+   }
+
+   private CodeBlock returningTransactionalMethodCall(ExecutableElement method) { // 3
+      var methodName = method.getSimpleName();
+      var params = translateMethodToSuperCallParams(method);
+      return CodeBlock.builder()
+              .addStatement(TRANSACTION_MANAGER + ".begin()")
+              .addStatement("var $LReturnValue = ($L) super.$L(%s)".formatted(params), methodName, method.getReturnType(), methodName)
+              .addStatement(TRANSACTION_MANAGER + ".commit()")
+              .addStatement("return $LReturnValue", methodName)
+              .build();
+   }
+
+   private String translateMethodToSuperCallParams(ExecutableElement method) { 
+      return method.getParameters().stream().map(variableElement -> variableElement.getSimpleName().toString())
+              .collect(Collectors.joining(", "));
+   }
+}
+```
+
+The code generation is really simple here.
+
+1. The first step is deciding upon the method call based on the return type of the super method.
+2. A void call is generated. This is very simple, as there is no need to store the results of the super call.
+3. Finally, the value returning method call is generated. The result is stored in a variable to be returned after the commit.
+
+##### The full code 
+
+The full code of the [*TransactionalInterceptedWriter*](/framework/src/main/java/io/jd/framework/transactional/TransactionalInterceptedWriter.java).
+
+### That's all for transactions
+
+This is everything I have prepared for you in transaction handling.
+
+The [code](/testapp-transactional/src/main/java/io/jd/testapp/DeclarativeTransactionsParticipationService.java) 
+below could be used, and support for transactions can be provided.
 
 ```java
 @Singleton
@@ -912,14 +1333,197 @@ public class DeclarativeTransactionsParticipationService implements Participatio
 }
 ```
 
-Code like that becomes our target for this part of the text.
-We would like to handle transactions just by adding *@Transactional* to the method.
+However, we must be sure to get the expected instance during the runtime, right?
+Let us check how to make it all work within our framework.
+To reach the goal, we need two more things.
 
-### How is it going to work
+1. The *TransactionPlugin* must be used during compilation.
+2. We must make our framework provide only intercepted instances.
 
-First of all, it would be beneficial to have annotation to be used. 
-I would like to use standard one instead writing my own. 
-So I decided to use *@Transactional* and *[TransactionManager]()* interface
+### Plugging the transaction handling into the framework
+
+We have seen the code that handles transaction processing. 
+Now, we have to make use of the *TransactionalPlugin* in our framework.
+To keep everything simple, I created an interface *ProcessorPlugin* which will be a way to register extensions.
+Thanks to that, the whole transaction processing code is held in separate classes.
+
+```java
+public interface ProcessorPlugin {
+    void init(ProcessingEnvironment processingEnv); // 1
+
+    Collection<JavaFile> process(Set<? extends Element> annotated); // 2
+
+    Class<? extends Annotation> reactsTo(); // 3
+}
+```
+
+The interface has three methods.
+
+1. The *init* method is responsible for the initialisation of the plugin.
+2. The *process* method does the actual processing. Therefore, it returns generated Java files.
+3. The *reactsTo* method provides information about annotation that the plugin is interested in.
+
+The plugins are hardwired so far and are used as presented in the [code](/framework/src/main/java/io/jd/framework/processor/BeanProcessor.java):
+
+```java
+public class BeanProcessor extends AbstractProcessor {
+    private List<ProcessorPlugin> plugins = List.of();
+
+    @Override
+    public synchronized void init(ProcessingEnvironment processingEnv) { // 1
+        super.init(processingEnv);
+        plugins = List.of(new TransactionalPlugin());
+        plugins.forEach(processorPlugin -> processorPlugin.init(processingEnv));
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) { // 2
+        try {
+            runPluginsProcessing(roundEnv);
+            // rest of the processing 
+        } catch (Exception e) {
+           // exception handling
+        }
+        // return
+    }
+
+    private void runPluginsProcessing(RoundEnvironment roundEnv) { // 3
+        plugins.stream().map(processorPlugin -> processorPlugin.process(roundEnv.getElementsAnnotatedWith(processorPlugin.reactsTo())))
+                .flatMap(Collection::stream)
+                .forEach(this::writeFile); // 4
+    }
+    
+    private void writeFile(JavaFile javaFile) {} // 4
+}
+```
+
+As you can see:
+
+1. Once the processor is initialised, it also initialises its plugins. 
+   In the more real-world code, the plugin discovery could possibly be run here.
+2. The processor starts its processing by running the plugins.
+3. All the plugins are run with elements annotated with the annotation that the plugin reacts to.
+4. The files generated by plugins are written to the actual files in some */generated* directory.
+
+### Implementation of the *ProcessorPlugin* for the *TransactionalPlugin*
+
+In the main part of the article, I omitted some code of the *TransactionalPlugin* related to the *ProcessorPlugin* implementation.
+Now, you can see the missing parts of the code below.
+
+```java
+public class TransactionalPlugin implements ProcessorPlugin { 
+
+    @Override
+    public void init(ProcessingEnvironment processingEnv) { // 1
+        this.processingEnv = processingEnv;
+        transactionalMessenger = new TransactionalMessenger(processingEnv.getMessager());
+    }
+
+    @Override
+    public Class<? extends Annotation> reactsTo() { // 2
+        return Transactional.class;
+    }
+}
+```
+
+1. The *init* method implementation is fairly simple. It just sets *processingEnv* and creates *TransactionalMessenger*.
+2. The *reactsTo* method implementation states that the plugin is interested in *@Transactional* annotation.
+   Who would guess, right?
+
+The provided code is nothing big.
+It is easy to notice that the most interesting thing was the *process* method shown before.
+
+### Provisioning of intercepted class
+
+In the "production" code, the framework must be able to provision the intercepted instances.
+To make this possible, I introduced the interface below.
+
+```java
+public interface Intercepted {
+    Class<?> interceptedType();
+}
+```
+
+This is very simple, yet very important.
+Thanks to the interface, we can be sure which type has its intercepted version.
+You may have remembered from the main part that our *$Intercepted* classes have implemented the interface.
+So how was this done?
+
+#### Implementing the interface
+
+The implementation of the interface is quite simple.
+For the *RepositoryA*:
+
+```java
+@Singleton
+public class RepositoryA {
+    // some @Transactional methods
+}
+```
+
+It will be implemented as:
+
+```java
+@Singleton
+class RepositoryA$Intercepted extends RepositoryA {
+
+   @Override
+   public Class interceptedType() {
+      return RepositoryA.class;
+   }
+   
+   // Overridden transactional methods
+}
+```
+
+In the source code of *TransactionalInterceptedWriter*, it would just add a few extra lines:
+
+```java
+class TransactionalInterceptedWriter {
+   private MethodSpec interceptedTypeMethod() {
+      return MethodSpec.methodBuilder("interceptedType")
+              .addAnnotation(Override.class)
+              .addModifiers(PUBLIC)
+              .addStatement("return $T.class", TypeName.get(transactionalElement.asType()))
+              .returns(ClassName.get(Class.class))
+              .build();
+   }
+}
+```
+
+Now, we can differentiate *Intercepted* classes from regular ones
+and point out types that have their intercepted versions.
+
+#### Using only intercepting classes during provisioning
+
+To get only the intercepted version and not the original one, we need to update the *BaseBeanProvider*.
+The simplified code was shown in the previous part about DI. Now, it needs an extra step.
+
+```java
+class BaseBeanProvider implements BeanProvider {
+   @Override
+   public <T> List<T> provideAll(Class<T> beanType) {
+      var allBeans = definitions.stream().filter(def -> beanType.isAssignableFrom(def.type()))
+              .map(def -> beanType.cast(def.create(this)))
+              .toList(); // 1
+      var interceptedTypes = allBeans.stream().filter(bean -> Intercepted.class.isAssignableFrom(bean.getClass()))
+              .map(bean -> ((Intercepted) bean).interceptedType())
+              .toList(); // 2
+      return allBeans.stream().filter(not(bean -> interceptedTypes.contains(bean.getClass()))).toList(); // 3
+   }
+}
+```
+
+1. Firstly, we find all the beans matching the needed type.
+2. Then, we find the beans that implement the *Intercepted* type.
+3. In the end, we return a list of the matching beans filtering out
+   the beans that are among the types with their intercepted version.
+
+### It works
+
+Now the whole solution works as expected. 
+The framework provides the *$Intercepted* instances that handle transactions for us.
+In the next part and final part, we will look at *RestController*s, so stay tuned!
 
 ## Afterwords
 
@@ -933,7 +1537,7 @@ Kudos to [Patresss](https://github.com/Patresss)!
 The solution presented was created based on [Micronaut](https://micronaut.io). My work with the framework made me
 interested in annotation processing.
 
-Kudos to Micronaut team for their excellent work!
+Kudos to the Micronaut team for their excellent work!
 
 ### The repository
 
@@ -943,5 +1547,4 @@ will find the time to develop it further.
 The code is neither the best possible nor handling all corner cases. It was never the point to create a fully-fledged
 framework.
 
-Nevertheless, if you have advice for me, or you have found a bug or would like to see some changes, please create the
-issue. I might pick it up one day and I will be very grateful.
+Nevertheless, please create the issue if you have advice for me, have found a bug, or would like to see some changes. I might pick it up one day and I will be very grateful.

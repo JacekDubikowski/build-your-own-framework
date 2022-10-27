@@ -1,10 +1,7 @@
 package io.jd.testapp;
 
 import jakarta.inject.Singleton;
-
-import javax.transaction.SystemException;
-import javax.transaction.TransactionManager;
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 
 @Singleton
 public class DeclarativeTransactionsParticipationService implements ParticipationService {

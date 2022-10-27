@@ -13,5 +13,5 @@ public interface ProcessorPlugin {
 
     Collection<JavaFile> process(Set<? extends Element> annotated);
 
-    Class<? extends Annotation> reactsOn();
+    Class<? extends Annotation> reactsTo();
 }

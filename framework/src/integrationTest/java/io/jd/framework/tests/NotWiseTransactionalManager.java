@@ -1,9 +1,9 @@
 package io.jd.framework.tests;
 
 import jakarta.inject.Singleton;
+import jakarta.transaction.Transaction;
+import jakarta.transaction.TransactionManager;
 
-import javax.transaction.Transaction;
-import javax.transaction.TransactionManager;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Singleton

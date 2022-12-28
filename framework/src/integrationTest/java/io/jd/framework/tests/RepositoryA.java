@@ -1,8 +1,7 @@
 package io.jd.framework.tests;
 
 import jakarta.inject.Singleton;
-
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 
 @Singleton
 public class RepositoryA {

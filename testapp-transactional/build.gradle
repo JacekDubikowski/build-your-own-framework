@@ -19,7 +19,7 @@ dependencies {
 }
 
 ext {
-   javaMainClass = "io.jd.testapp.FrameworkApp"
+    javaMainClass = "io.jd.testapp.FrameworkApp"
 }
 
 application {

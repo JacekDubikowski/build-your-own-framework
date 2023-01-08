@@ -7,6 +7,7 @@ import jakarta.transaction.Transactional;
 public class FinalMethodA {
 
     @Transactional
-    public final void save() {}
+    public final void save() {
+    }
 
 }

@@ -1,16 +1,16 @@
 package io.jd.framework;
 
-import static org.reflections.scanners.Scanners.SubTypes;
-
-import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
-import java.util.List;
-
 import org.reflections.Reflections;
 import org.reflections.Store;
 import org.reflections.util.ConfigurationBuilder;
 import org.reflections.util.FilterBuilder;
 import org.reflections.util.QueryFunction;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.reflections.scanners.Scanners.SubTypes;
 
 public class BeanProviderFactory {
 

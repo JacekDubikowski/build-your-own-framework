@@ -2,13 +2,10 @@ package io.jd.framework.processor;
 
 import com.squareup.javapoet.JavaFile;
 import io.jd.framework.transactional.TransactionalPlugin;
+import io.jd.framework.webapp.WebPlugin;
 import jakarta.inject.Singleton;
 
-import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
+import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
@@ -23,12 +20,14 @@ import static javax.tools.Diagnostic.Kind.ERROR;
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
 public class BeanProcessor extends AbstractProcessor {
     private List<ProcessorPlugin> plugins = List.of();
+    private TypeElement collectionElement;
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
-        plugins = List.of(new TransactionalPlugin());
+        plugins = List.of(new TransactionalPlugin(), new WebPlugin());
         plugins.forEach(processorPlugin -> processorPlugin.init(processingEnv));
+        this.collectionElement = processingEnv.getElementUtils().getTypeElement("java.util.Collection");
     }
 
     @Override
@@ -57,7 +56,12 @@ public class BeanProcessor extends AbstractProcessor {
     }
 
     private void writeDefinition(Dependency dependency) {
-        JavaFile javaFile = new DefinitionWriter(dependency.type(), dependency.dependencies()).createDefinition();
+        JavaFile javaFile = new DefinitionWriter(
+                dependency.type(),
+                dependency.dependencies(),
+                processingEnv.getTypeUtils(),
+                this.collectionElement
+        ).createDefinition();
         writeFile(javaFile);
     }
 

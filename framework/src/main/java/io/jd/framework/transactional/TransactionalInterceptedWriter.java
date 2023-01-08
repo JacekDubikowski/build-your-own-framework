@@ -1,13 +1,6 @@
 package io.jd.framework.transactional;
 
-import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.CodeBlock;
-import com.squareup.javapoet.JavaFile;
-import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.ParameterSpec;
-import com.squareup.javapoet.TypeName;
-import com.squareup.javapoet.TypeSpec;
-import com.squareup.javapoet.TypeVariableName;
+import com.squareup.javapoet.*;
 import io.jd.framework.Intercepted;
 import io.jd.framework.processor.Dependency;
 import io.jd.framework.processor.TypeDependencyResolver;
@@ -22,9 +15,9 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.stream.Collectors.joining;
 import static javax.lang.model.element.Modifier.PUBLIC;
 
 class TransactionalInterceptedWriter {
@@ -39,6 +32,15 @@ class TransactionalInterceptedWriter {
         this.transactionalElement = transactionalElement;
         this.transactionalMethods = transactionalMethods;
         this.packageElement = packageElement;
+    }
+
+    private static CodeBlock tryClause(CodeBlock transactionalMethodCall, CodeBlock catchClause) {
+        return CodeBlock.builder()
+                .beginControlFlow("try")
+                .add(transactionalMethodCall)
+                .endControlFlow()
+                .add(catchClause)
+                .build();
     }
 
     public JavaFile createDefinition(Messager messager) {
@@ -62,7 +64,7 @@ class TransactionalInterceptedWriter {
                 .toList();
         var superCallParams = IntStream.range(0, typeNames.size())
                 .mapToObj(integer -> "$" + integer)
-                .collect(Collectors.joining(", "));
+                .collect(joining(", "));
 
         return MethodSpec.constructorBuilder()
                 .addParameter(ParameterSpec.builder(TransactionManager.class, TRANSACTION_MANAGER).build())
@@ -101,15 +103,6 @@ class TransactionalInterceptedWriter {
                 .build();
     }
 
-    private static CodeBlock tryClause(CodeBlock transactionalMethodCall, CodeBlock catchClause) {
-        return CodeBlock.builder()
-                .beginControlFlow("try")
-                .add(transactionalMethodCall)
-                .endControlFlow()
-                .add(catchClause)
-                .build();
-    }
-
     private CodeBlock transactionalMethodCall(ExecutableElement executableElement) {
         return executableElement.getReturnType().getKind() == TypeKind.VOID
                 ? transactionalVoidCall(executableElement)
@@ -137,7 +130,7 @@ class TransactionalInterceptedWriter {
     }
 
     private String translateMethodToSuperCallParams(ExecutableElement method) {
-        return method.getParameters().stream().map(variableElement -> variableElement.getSimpleName().toString()).collect(Collectors.joining(", "));
+        return method.getParameters().stream().map(variableElement -> variableElement.getSimpleName().toString()).collect(joining(", "));
     }
 
     private CodeBlock catchClause() {

@@ -3,7 +3,7 @@ package io.jd.framework.tests;
 import jakarta.inject.Singleton;
 
 @Singleton
-public class ServiceC {
+public class ServiceC implements Service {
     private final ServiceA serviceA;
     private final ServiceB serviceB;
 

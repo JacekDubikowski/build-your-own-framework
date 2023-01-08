@@ -7,6 +7,7 @@ import jakarta.transaction.Transactional;
 public final class FinalA {
 
     @Transactional
-    void sava() {}
+    void sava() {
+    }
 
 }

@@ -5,11 +5,7 @@ import io.jd.framework.BeanProviderFactory;
 import notio.notjd.ExternalService;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ProviderTest {
 
@@ -81,5 +77,13 @@ class ProviderTest {
 
         var result = beanProvider.provideAll(ExternalService.class);
         assertFalse(result.isEmpty(), "Should provide the bean which package is was explicitly provided to be scanned for BeanDefinitions");
+    }
+
+    @Test
+    void shouldProvideClassDeclaredWithCollectionOfBeans() {
+        BeanProvider beanProvider = BeanProviderFactory.getInstance();
+
+        Services services = beanProvider.provide(Services.class);
+        assertNotNull(services);
     }
 }

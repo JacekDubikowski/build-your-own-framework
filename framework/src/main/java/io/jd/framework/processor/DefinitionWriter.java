@@ -1,35 +1,33 @@
 package io.jd.framework.processor;
 
-import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.CodeBlock;
-import com.squareup.javapoet.FieldSpec;
-import com.squareup.javapoet.JavaFile;
-import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.ParameterSpec;
-import com.squareup.javapoet.ParameterizedTypeName;
-import com.squareup.javapoet.TypeName;
-import com.squareup.javapoet.TypeSpec;
+import com.squareup.javapoet.*;
 import io.jd.framework.BeanDefinition;
 import io.jd.framework.BeanProvider;
 import io.jd.framework.ScopeProvider;
 
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Types;
 import java.util.List;
-import java.util.stream.Collectors;
 
+import static java.util.stream.Collectors.joining;
 import static javax.lang.model.element.Modifier.PUBLIC;
 
 class DefinitionWriter {
     private final TypeElement definedClass;
     private final List<TypeMirror> constructorParameterTypes;
     private final ClassName definedClassName;
+    private final Types types;
+    private final TypeElement collectionElement;
 
-    DefinitionWriter(TypeElement definedClass, List<TypeMirror> constructorParameterTypes) {
+    DefinitionWriter(TypeElement definedClass, List<TypeMirror> constructorParameterTypes, Types types, TypeElement collectionElement) {
         this.definedClass = definedClass;
         this.constructorParameterTypes = constructorParameterTypes;
         this.definedClassName = ClassName.get(definedClass);
+        this.types = types;
+        this.collectionElement = collectionElement;
     }
 
     public JavaFile createDefinition() {
@@ -72,16 +70,42 @@ class DefinitionWriter {
     }
 
     private CodeBlock singletonScopeInitializer() {
-        var typeNames = constructorParameterTypes.stream().map(TypeName::get).toList();
-        var constructorParameters = typeNames.stream().map(__ -> "beanProvider.provide($T.class)")
-                .collect(Collectors.joining(", "));
+        var providerCallAndItsTypes = constructorParameterTypes.stream()
+                .map(this::processConstructorType)
+                .toList();
+        var constructorParameters = providerCallAndItsTypes.stream()
+                .map(ProviderCallAndItsType::callTemplate)
+                .collect(joining(","));
+        var types = providerCallAndItsTypes.stream()
+                .map(ProviderCallAndItsType::typeName)
+                .toArray();
+
         return CodeBlock.builder()
                 .add("ScopeProvider.singletonScope(")
                 .add("beanProvider -> ")
                 .add("new ")
                 .add("$T", definedClassName)
-                .add("(" + constructorParameters + ")", typeNames.toArray())
+                .add("(" + constructorParameters + ")", types)
                 .add(")")
                 .build();
+    }
+
+    private ProviderCallAndItsType processConstructorType(TypeMirror type) {
+        DeclaredType declaredType = (DeclaredType) type;
+
+        List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
+        if (typeArguments.size() == 0) {
+            return new ProviderCallAndItsType("beanProvider.provide($T.class)", TypeName.get(type));
+        } else if (typeArguments.size() == 1 && types.isAssignable(types.erasure(type), collectionElement.asType())) {
+            return new ProviderCallAndItsType("beanProvider.provideAll($T.class)", TypeName.get(typeArguments.get(0)));
+        } else {
+            throw new RuntimeException("Cannot provide %s".formatted(type));
+        }
+    }
+
+    private record ProviderCallAndItsType(
+            String callTemplate,
+            TypeName typeName
+    ) {
     }
 }

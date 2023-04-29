@@ -7,6 +7,7 @@ import jakarta.transaction.Transactional;
 public class StaticA {
 
     @Transactional
-    static void save() {}
+    static void save() {
+    }
 
 }

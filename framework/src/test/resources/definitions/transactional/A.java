@@ -7,7 +7,8 @@ import jakarta.transaction.Transactional;
 public class A {
 
     @Transactional
-    void save() {}
+    void save() {
+    }
 
     @Transactional
     int read() {

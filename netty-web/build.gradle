@@ -1,0 +1,24 @@
+plugins {
+    id 'java'
+}
+
+group 'io.jd.testapp'
+version '0.0.1'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation(project(":framework"))
+    implementation('org.eclipse.jetty:jetty-server:11.0.13')
+    annotationProcessor(project(":framework"))
+
+    testAnnotationProcessor(project(":framework"))
+    testImplementation('org.junit.jupiter:junit-jupiter:5.8.1')
+    testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.8.1')
+}
+
+test {
+    useJUnitPlatform()
+}

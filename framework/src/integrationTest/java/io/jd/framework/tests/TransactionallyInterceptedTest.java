@@ -5,7 +5,6 @@ import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -52,9 +51,8 @@ class TransactionallyInterceptedTest {
 
 @Singleton
 class TestRepository {
-    boolean shouldThrow = false;
-
     private final ServiceA serviceA;
+    boolean shouldThrow = false;
 
     TestRepository(ServiceA serviceA) {
         this.serviceA = serviceA;

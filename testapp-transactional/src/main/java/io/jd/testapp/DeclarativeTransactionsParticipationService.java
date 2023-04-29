@@ -16,10 +16,10 @@ public class DeclarativeTransactionsParticipationService implements Participatio
     @Override
     @Transactional
     public void participate(ParticipantId participantId, EventId eventId) {
-            var participant = participantRepository.getParticipant(participantId);
-            var event = eventRepository.findEvent(eventId);
-            eventRepository.store(event.addParticipant(participant));
+        var participant = participantRepository.getParticipant(participantId);
+        var event = eventRepository.findEvent(eventId);
+        eventRepository.store(event.addParticipant(participant));
 
-            System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
+        System.out.printf("Participant: '%s' takes part in event: '%s'%n", participant, event);
     }
 }

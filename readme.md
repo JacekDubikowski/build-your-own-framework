@@ -1525,11 +1525,586 @@ Now the whole solution works as expected.
 The framework provides the *$Intercepted* instances that handle transactions for us.
 In the next part and final part, we will look at *RestController*s, so stay tuned!
 
+## Part 5 - Controllers
+
+In the previous two parts, we covered the basics of annotation processing and showed how to use it for dependency injection and declarative transaction handling.
+In this one, we will continue our journey by building on the knowledge we gained and exploring how to create a REST controller using the annotation processor mechanism.
+
+The three main Java app frameworks provide support for creating controllers through annotations.
+
+* [Spring Framework](https://spring.io/guides/tutorials/rest/)
+* [Micronaut](https://docs.micronaut.io/2.0.0.M2/guide/index.html#httpServer)
+* [Quarkus](https://quarkus.io/guides/rest-json)
+
+### What are we going to build?
+
+Let me show you what we will achieve in the article.
+
+A REST controller is a web application component that handles HTTP requests and responses using the REST architectural style.
+
+Once you start the demo [application](/testapp-web/src/main/java/io/jd/testapp/FrameworkApp.java) from the event organisation domain, it will print the port you can use for communication.
+
+```text
+Port: <port-value>
+```
+
+Thanks to that, you can easily interact with the app using, for example, curl:
+
+```shell
+-> % curl -v http://localhost:<port-value>/participate -d '{"eventId": "id", "participationId": "partId"}'
+...
+< HTTP/1.1 200 OK
+< Date: Sat, 25 Feb 2023 11:01:18 GMT
+< Content-Type: application/json
+< Content-Length: 74
+< Server: Jetty(11.0.13)
+< 
+{"accepted":{"eventId":{"value":"id"},"participantId":{"value":"partId"}}}
+```
+
+The class responsible for this response is [ParticipationController](/testapp-web/src/main/java/io/jd/testapp/ParticipationController.java):
+
+```java
+@Singleton
+public class ParticipationController {
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final ParticipationService participationService;
+
+    public ParticipationController(ParticipationService participationService) {
+        this.participationService = participationService;
+    }
+
+    @RequestHandle(value = "/participate", method = HttpMethod.POST)
+    String participate(Request request) throws IOException {
+        var participationDTO = objectMapper.readValue(request.body(), ParticipationDTO.class);
+        participationService.participate(participationDTO.participantId(), participationDTO.eventId());
+        return objectMapper.writeValueAsString(Map.of("accepted", participationDTO));
+    }
+
+}
+```
+
+### The solution and its architecture
+
+The *Controller* above wouldn't work without proper annotation processing and some server ([Jetty](https://www.eclipse.org/jetty/)) that handles the traffic.
+Hence, I split the text into two parts.
+The first would cover the annotation processing part.
+The second would explain how it was used alongside Jetty.
+First of all, why I picked [Jetty](https://www.eclipse.org/jetty/) for my text?
+The answer is not complicated, it is one of the most popular servers out there, and I thought its API would serve my text well.
+Nevertheless, any server could have been used.
+
+Additionally, the architecture of the solution can follow the same simple division. 
+Please look at the simplified diagram:
+
+![Web "class" diagram](./docs/Web.png)
+
+As you can see, the previously created and used *BeanProcessor* would use the new *WebPlugin*. 
+The plugin is responsible for creating implementations of *RequestHandler* based on *RequestHandle* annotations in the code.
+Then the server side would pick it up using DI from the previous part and translate it to a working Jetty solution using
+*FrameworkHandler* class that extends *Jetty* native *AbstractHandler*.
+
+### Assumptions and verification
+
+In the text, I will present a very simplistic approach to show you the idea that could lead to a fully-fledged framework.
+So proper and complex error handling, complicated path matching, resolving path variables, query params, and the request body is out of scope. 
+I also do not care here for REST levels and HATEOAS. Nevertheless, I will show places where you can add code to handle that.
+The endpoint method can accept at most one parameter represented in the form of *io.jd.framework.webapp.Request*. 
+I will discuss it later on.
+
+To see if the code works, I created one [acceptance test](netty-web/src/test/java/io/jd/framework/tests/ServerTest.java) that, once working, would make us satisfied with the result we have achieved.
+
+```java
+class ServerTest {
+    @Test
+    void testSlashInt2() throws IOException, InterruptedException {
+        var request = getRequest("/int2");
+
+        var response = client.send(request, ofString());
+
+        assertEquals(200, response.statusCode());
+        assertDoesNotThrow(() -> Integer.parseInt(response.body()));
+        assertEquals("text/plain;charset=utf-8", getContentTypeValue(response));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 11, 100, 400})
+    void testSlashInt3(int value) throws IOException, InterruptedException {
+        var request = postRequest(BodyPublishers.ofString(String.valueOf(value)), "/int3");
+
+        var response = client.send(request, ofString());
+
+        assertEquals(response.statusCode(), 200);
+        assertEquals(Integer.parseInt(response.body()), value);
+        assertEquals(getContentTypeValue(response), APPLICATION_JSON);
+    }
+
+    @Test
+    void testSlashVoid() throws IOException, InterruptedException {
+        var request = postRequest(noBody(), "/void");
+
+        var response = client.send(request, ofString());
+
+        assertEquals(response.statusCode(), 204);
+        assertEquals(response.body(), "");
+    }
+
+    @Test
+    void testSlashReturnErrorResponse() throws IOException, InterruptedException {
+        var request = putRequest(noBody(), "/return-error-response");
+
+        var response = client.send(request, ofString());
+
+        assertEquals(500, response.statusCode());
+        assertEquals("", response.body());
+    }
+
+    @Test
+    void testSlashResource() throws IOException, InterruptedException {
+        var request = getRequest("/resource");
+
+        var response = client.send(request, ofString());
+
+        assertEquals(200, response.statusCode());
+        assertEquals("{\"key\":\"value\"}", response.body());
+    }
+
+    @Test
+    void testSlashError() throws IOException, InterruptedException {
+        var request = getRequest("/error");
+
+        var response = client.send(request, ofString());
+
+        assertEquals(500, response.statusCode());
+        assertEquals("{\"errorMessage\": \"Expected error message\"}", response.body());
+    }
+}
+```
+
+### Annotation processing
+
+As you surely noticed, a new annotation was introduced. 
+The [*@RequestHandle*](framework/src/main/java/io/jd/framework/webapp/RequestHandle.java) is very simple and responsible for declaring the HTTP endpoint.
+
+```java
+@Retention(RetentionPolicy.SOURCE)
+@Target(ElementType.METHOD)
+public @interface RequestHandle {
+   HttpMethod method();
+   String value() default "/";
+   String produce() default MediaType.APPLICATION_JSON;
+}
+```
+
+It is translated during annotation processing to the implementation of the [RequestHandler](framework/src/main/java/io/jd/framework/webapp/RequestHandler.java) interface.
+
+```java
+public interface RequestHandler {
+    HttpMethod method();
+    String produce(); // What content type is produced
+    String path(); // What path should be matched
+    Object process(Request request) throws Exception; // Actual request processing
+}
+```
+
+So for any declared endpoint, there will be one corresponding *RequestHandler* generated automatically.
+
+The autogenerated implementation for the endpoint which is declared below:
+
+```java
+@Singleton
+public class ExampleController {
+    @RequestHandle(value = "/int3", method = HttpMethod.POST)
+    public int getIntFromString(Request request) {
+        return Integer.parseInt(request.body());
+    }
+}
+```
+
+would look like this:
+
+```java
+@Singleton // 1
+final class ExampleController$getIntFromString$1$handler implements RequestHandler { // 2
+  private final ExampleController controller; // 3
+
+  @Override
+  public String produce() { 
+    return "application/json";
+  }
+
+  @Override
+  public String path() {
+    return "/int3";
+  }
+
+  @Override
+  public HttpMethod method() {
+    return HttpMethod.POST;
+  }
+
+  @Override
+  public Object process(Request arg0) throws Exception { // 4
+    return controller.getIntFromString(arg0);
+  }
+}
+```
+
+1. It is annotated with *@Singleton* so that our DI solution can inject it.
+2. The name consists of 4 parts, once split on the '$' sign:
+   1. ExampleController - the class name the endpoint was declared in.
+   2. getIntFromString - the method's name annotated with *@RequestHandle*
+   3. 1 - ordinal number, provided for cases when two methods have the same name but different parameter lists.
+   4. handler - an indicator that it is just a handler.
+3. The controller field is used to do the actual processing.
+4. The *process* method that uses the controller to process the request returns *Object* so the solution can be flexible.
+
+Now that we have covered the outcome of the annotation processing, 
+it's time to see how the annotation processor does this.
+This process is crucial to understanding how our framework works. 
+So, let's delve into the magic.
+
+#### Annotation processor work
+
+First, lets us see the [*WebPlugin*](framework/src/main/java/io/jd/framework/webapp/WebPlugin.java). 
+It extends [ProcessorPlugin](framework/src/main/java/io/jd/framework/processor/ProcessorPlugin.java) introduced before to split the processor’s responsibility among plugins.
+
+The code is reasonably simple (error logging is skipped):
+
+```java
+public class WebPlugin implements ProcessorPlugin {
+   private HandlerWriter handlerWriter; // That would be covered later on
+   private ProcessingEnvironment processingEnv; // For utils usage
+
+   @Override
+   public Class<? extends Annotation> reactsTo() { // The plugin is interested in RequestHandle annotation
+      return RequestHandle.class;
+   }
+
+   @Override
+   public Collection<JavaFile> process(Set<? extends Element> annotated) { // 1
+      Map<NameData, List<ExecutableElement>> nameToMethodMaps = ElementFilter.methodsIn(annotated)
+              .stream()
+              .collect(groupingBy(NameData::new));
+
+      var resultFiles = new ArrayList<JavaFile>();
+      for (var entry : nameToMethodMaps.entrySet()) {
+         var generatedFiles = handle(entry.getKey(), entry.getValue());
+         resultFiles.addAll(generatedFiles);
+      }
+      return resultFiles;
+   }
+
+   private List<JavaFile> handle(NameData nameData, List<ExecutableElement> handlers) { // 3
+      var resultFiles = new ArrayList<JavaFile>();
+      for (int i = 0; i < handlers.size(); i++) {
+         JavaFile generatedFile = handle(nameData, new IndexedValue<>(i+1, handlers.get(i)));
+         resultFiles.add(generatedFile);
+      }
+      return resultFiles;
+   }
+
+   private JavaFile handle(NameData nameData, IndexedValue<ExecutableElement> indexedValue) { // 4
+      var handlerMethod = indexedValue.value();
+      var typeSpec = createType(nameData, indexedValue, handlerMethod);
+      var packageName = ProcessingEnvUtils.getPackageName(processingEnv, handlerMethod);
+      return JavaFile.builder(packageName, typeSpec).build();
+   }
+
+   private TypeSpec createType(NameData nameData, IndexedValue<ExecutableElement> indexedValue,
+                               ExecutableElement handlerMethod) { // 5
+      return handlerWriter.buildHandler(
+              nameData.toHandlerMethodName(indexedValue.index()),
+              handlerMethod,
+              TypeName.get(handlerMethod.getEnclosingElement().asType()),
+              handlerMethod.getAnnotation(RequestHandle.class)
+      );
+   }
+
+   private record NameData(Name controllerName, Name handleName) { // 2
+      NameData(ExecutableElement element) {
+         this(element.getEnclosingElement().getSimpleName(), element.getSimpleName());
+      }
+
+      String toHandlerMethodName(int index) {
+         return "%s$%s$%s$handler".formatted(controllerName.toString(), handleName.toString(), index);
+      }
+   }
+}
+```
+
+1. The *process* method founds methods annotated with *RequestHandle*.
+   Then group the methods by the class they are declared in and the method name.
+   The methods grouped that way become the building block for creating the handlers.
+2. NameData record is just a container for the name of the class the method was declared in and the method name.
+   It also provides a method to create a handler implementation name once provided with an index value.
+3. In the first step, we just enumerate the methods that share a common class and method name.
+4. In the *handle* method, the type is created using *HandlerWriter* and creates the *JavaFile*, result merging it with the package data.
+5. The *createType* method is just called to the *HandlerWriter* with a class name to be created, 
+   the element representing the annotated method, the controller's name and the *RequestHandle* annotation instance of the method.
+
+As you can see, no code generation is done in the plugin itself. 
+The whole [JavaPoet](https://github.com/square/javapoet) soup is in the [*HandlerWriter*](framework/src/main/java/io/jd/framework/webapp/HandlerWriter.java).
+So let's see it. However, it will try to minimise the JavaPoet boilerplate to the minimum. 
+If you read this, I think you get the *JavaPoet*'s idea.
+
+```java
+class HandlerWriter {
+    // the Element fields representing *RequestHandler#method*, *RequestHandler#prodice*, *RequestHandler#process*, *RequestHandler#path*
+    private final ExecutableElement httpMethodElement; 
+    private final ExecutableElement producesElement;
+    private final ExecutableElement processElement;
+    private final ExecutableElement pathElement;
+
+    private final Types typeUtils; // taken out of *ProcessingEnv#getTypeUtils*
+    private final TypeMirror requestType; // 1
+
+    TypeSpec buildHandler(String handlerMethodName, ExecutableElement handler, TypeName typeName, RequestHandle annotation) {
+        // The created handler has just one field with the Controller that declared the endpoint.
+        // Is annotated with @Singleton and extends RequestHandler. Does not declare any other than the overridden method.
+        return TypeSpec.classBuilder(handlerMethodName)
+                ...
+                .build();
+    }
+
+    // constructor, produce, path and method overriding code is omitted. Refer to the source code if you want to see this.
+
+   private MethodSpec process(ExecutableElement handlerMethod) { // 2
+      var controllerCall = controllerCall(handlerMethod, handlerMethod.getParameters());
+      TypeKind handlerMethodType = handlerMethod.getReturnType().getKind();
+
+      return handlerMethodType == TypeKind.VOID
+              ? voidMethod(controllerCall)
+              : valueReturningMethod(controllerCall);
+   }
+
+    private MethodSpec valueReturningMethod(CodeBlock controllerCall) { // 3
+        return MethodSpec.overriding(processElement)
+                .addStatement("return $L", controllerCall)
+                .build();
+    }
+
+    private MethodSpec voidMethod(CodeBlock controllerCall) { // 4
+        return MethodSpec.overriding(processElement)
+                .addStatement(controllerCall)
+                .addStatement("return $T.noContent()", Response.class)
+                .build();
+    }
+
+    private CodeBlock controllerCall(ExecutableElement handlerMethod, List<? extends VariableElement> parameters) { // 5
+        // validation that there is at most one param of Request type was omitted
+        var methodCallParams = parameters.stream().map(VariableElement::getSimpleName).map(Name::toString)
+                .findFirst()
+                .map(__ -> "(arg0)")
+                .orElse("()");
+        return CodeBlock.builder()
+                .add("controller.$L$L", handlerMethod.getSimpleName().toString(), methodCallParams)
+                .build();
+    }
+}
+```
+
+All the fields are populated in the constructor that I omitted. 
+The constructor of the handler being written accepts just the Controller that contains the method to be called in the process method.
+
+
+1. The *requestType* field represents the compile-time type of the [*Request*](framework/src/main/java/io/jd/framework/webapp/Request.java).
+   The endpoint must be able to accept some parameters and get the data out of it, hence the class.
+   In our simplified context, the interface is simplistic.
+   
+   ```java
+   public interface Request {
+       String body();
+   }
+   ```
+   
+   In the real world, this interface should have multiple methods to access headers, body and other stuff like that.
+2. In the first part of the *process* method, the controller code is prepared, 
+   and then we just check if the controller is supposed to return something or not.
+3. The value-returning case is straightforward. The process method just returns the result of the call to the controller.
+4. The void method is a little different. We just need to return something to be used for the HTTP response, but there is nothing.
+   What was I supposed to do? I introduced the [*Response*](framework/src/main/java/io/jd/framework/webapp/Response.java) interface to solve the problem.
+   The interface is very simple and provides one utility method to create a response with no body and 204 No Content status.
+   
+   ```java
+   public interface Response {
+       int statusCode();
+   
+       String body();
+   
+   static Response noContent() {
+      // instance that just returns body as null and 204 status code
+   }
+   ```
+   
+   But why return the *Object* from the method as there is a proper type for it?
+   The solution is very elastic,
+5. and the return type can be interpreted later in the code.
+   Thanks to that, we can provide reasonable default behaviour when a return type is just a regular object.
+   You will see the matching code shortly, don't worry.
+5. The *controllerCall* is a very simple method in our case.
+   We start by validating if there is at most one parameter, which is of the expected type.
+   This is the place where you would be able to provide extensive support for request bodies, path variables, and query params
+
+This is it for the annotation processing side. Let us dive deep into the server side now.
+
+### Server side
+
+As mentioned, all you need to do is provide a matching glue code for Jetty, which would work.
+
+Let's start with translating our handlers to Jetty handlers. 
+So please take a look at [*FrameworkHandler*](netty-web/src/main/java/io/jd/framework/tests/FrameworkHandler.java).
+
+```java
+class FrameworkHandler extends AbstractHandler {
+    FrameworkHandler(RequestHandler handler) {
+        this.handler = handler;
+    }
+
+   @Override
+   public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException {
+      if (methodAndPathMatches(baseRequest)) { // 1
+         response.setCharacterEncoding("utf-8"); // 2
+         response.setContentType(handler.produce()); // 2
+         handle(response, request); // 3
+         baseRequest.setHandled(true); // 
+      }
+   }
+
+   private boolean methodAndPathMatches(Request baseRequest) { // 1
+      return Objects.equals(baseRequest.getHttpURI().getPath(), handler.path())
+              && Objects.equals(baseRequest.getMethod(), handler.method().toString());
+   }
+
+   private void handle(HttpServletResponse response, HttpServletRequest request) throws IOException { // 3
+      var frameworkRequest = SimpleRequest.of(HttpMethod.valueOf(request.getMethod()), readWholeBody(request));
+      try {
+         var result = handler.process(frameworkRequest);
+         handleWorkResult(response, result);
+      } catch (Exception e) {
+         response.getWriter().print("{\"errorMessage\": \"%s\"}".formatted(e.getMessage()));
+         response.setStatus(500);
+      }
+   }
+
+   private static void handleWorkResult(HttpServletResponse response, Object result) throws IOException { // 3
+      if (result instanceof Response r) {
+         processResponse(response, r);
+      } else {
+         process(response, result);
+      }
+   }
+
+   private static void processResponse(HttpServletResponse response, Response r) throws IOException { // 3.1
+      response.setStatus(r.statusCode());
+      if (r.body() != null) {
+         response.getWriter().print(r.body());
+      }
+   }
+
+   private static void process(HttpServletResponse response, Object result) throws IOException { // 3.2
+      response.setStatus(200);
+      response.getWriter().print(result.toString());
+   }
+}
+```
+
+This is also a very simple solution. 
+It is not even close to a production solution, but it serves its purpose. 
+This is the part in the code where error handling could be provided as well as serialisation and deserialisation if needed. 
+As mentioned before, this is the place where the code will differentiate between return types. 
+The *Response* type would be treated differently than any other type of object.
+
+
+1. The first important thing is to match the path. 
+   Our framework doesn't support the path variables or path patterns, so the matching is very simple.
+   This is the place where you could implement more complex matching, to be able to provide a production-ready solution.
+2. Some basic attributes are passed to the response like encoding and content type (from the handler).
+3. We just create a simple instance of the *Request* that would be used to call the handler and call the *RequestHandler#process* method.
+   Then we just interpret the response.
+   1. If the result of the handler call is *Response* instance, then we just translate its status code and body to the response.
+   2. If the result is not *Response* instance, then we return status 200 OK and just write the value to the response the way it is.
+In this example, the caller should worry if the object would be written as proper JSON for example, but in the real world, it is of course the job of the framework.  
+   In case of any error 500 status code with a JSON error body is returned to the caller.
+
+Having all that in mind, we can just look at the [*ServerContainer*](netty-web/src/main/java/io/jd/framework/tests/ServerContainer.java).
+
+```java
+@Singleton
+public class ServerContainer {
+    private final HandlerCollection handlers = new HandlerCollection();
+    private volatile Server server = null;
+
+    ServerContainer(Collection<RequestHandler> handlers) { // 1
+        handlers.stream()
+                .map(FrameworkHandler::new)
+                .forEach(this.handlers::addHandler);
+    }
+
+    public synchronized void start() throws Exception { // 2
+        if (server == null) {
+           server = new Server();
+           var connector = new ServerConnector(server);
+           server.addConnector(connector);
+           server.setHandler(this.handlers);
+        }
+        server.start();
+    }
+
+    public int port() { // 3
+        return server.getURI().getPort();
+    }
+
+    public void stop() throws Exception { // 4
+        server.stop();
+    }
+}
+```
+
+The server container is just a kind of utility. 
+
+1. In the constructor, the *RequestHandler*s are mapped to *FrameworkHandler*s.
+2. Once a server is started using, who would guess, the *start* method, handlers are passed to it for traffic handling.
+3. After the start, the port method returns the port that the server is listening to.
+4. The *stop* method also serves as name states.
+
+From now on, all tests pass, and the example application works.
+If you want to write the code to use it, just ask *BeanProvider* for an instance of the *ServerContainer* and run the server as in the example [here](testapp-web/src/main/java/io/jd/testapp/FrameworkApp.java).
+
+### Epilogue
+
+Congratulations! You made it to the end of our journey together (not just the web part). 
+It’s been a pleasure having you join me on this coding adventure.
+
+In the readme of this repository, we explored the process of creating an educational Java framework that relies on annotation processing. 
+It all started by creating a dependency injection framework. 
+Subsequently, we incorporated the @Transactional annotation to support transaction management. 
+In the final stage, we enriched our framework with a web component by creating HTTP endpoints using annotations. 
+I sincerely hope you appreciate the framework as much as I do now. 
+While I understand it will never be put to practical use, it's simple, easy to explain, and a great way to learn something new.
+
+We learned much about the annotation processing API and its potential throughout this journey. 
+We discovered that the annotation processor is a flexible tool, but it does have its limits. 
+However, once you get used to the API, changes can be introduced rapidly and efficiently.
+
+Remarkably, metaprogramming capabilities were integrated without the need to learn a separate meta-language, and the code was written in full Java using IDE support. 
+I noticed that the complexity of the API is on par with the Reflection API, which is widely spread yet working in runtime (so you cannot see the effects of your metaprogramming directly).
+
+Evidently, there is also a gain in the speed of the code as reflection tends to be slow and annotation processing is fast enough to go unnoticed during project compilation. 
+Additionally, debugging tends to be simpler as the source code exists and can be checked, contrary to, e.g. proxies created in runtime.
+
+Furthermore, I expect the usage of the annotation processor to grow in the coming years as it has already been adopted by Micronaut and Quarkus frameworks. 
+The annotation processor approach seems to click with GraalVM and native Java applications, giving the processor chance to shine in the cloud environment.
+
+I hope I have convinced you that better, more efficient, and more robust frameworks can be created using the approach.
+I would love to hear that the text inspired you to take the next step by attempting to create your own annotation processor someday. Remember, the possibilities are limitless, and the coding landscape is constantly changing, and Java is as well. As JDK continues to evolve, new features could enhance the usefulness of the annotation processor even further.
+
 ## Afterwords
 
 ### My inspiration
 
-The repository is based on other existing, awesome, and fabulous
+The repository is based on another existing, awesome, and fabulous
 repository [Java Own Framework - step by step](https://github.com/Patresss/Java-Own-Framework---step-by-step).
 
 Kudos to [Patresss](https://github.com/Patresss)!

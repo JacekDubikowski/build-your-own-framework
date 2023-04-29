@@ -2,6 +2,8 @@ rootProject.name = 'build-your-own-framework'
 
 include(
         ':framework',
+        ':netty-web',
         ':testapp',
-        ':testapp-transactional'
+        ':testapp-transactional',
+        ':testapp-web'
 )

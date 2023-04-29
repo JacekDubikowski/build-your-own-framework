@@ -1,0 +1,47 @@
+@startuml web
+
+namespace AnnotationProcessing {
+    annotation RequestHandle
+    interface RequestHandler
+
+    class BeanProcessor {
+        webPlugin: WebPlugin 
+    }
+    class WebPlugin
+
+    class Controller$get$1$handler
+    class Controller$post$1$handler
+
+    BeanProcessor --> WebPlugin : uses
+
+    RequestHandler <|-- Controller$get$1$handler
+    RequestHandler <|-- Controller$post$1$handler
+
+    note "BeanProcessor using WebPlugin writes \nthe source for implementations of RequestHandler" as N1
+    N1 -- WebPlugin
+    N1 -- RequestHandle
+    N1 -- RequestHandler
+}
+
+class org.eclipse.jetty.server.handler.AbstractHandler
+
+namespace ServerSide {
+
+    org.eclipse.jetty.server.handler.AbstractHandler <|-u- FrameworkHandler
+
+    class FrameworkHandler {
+        new(RequestHandler handler)
+    }
+
+    class ServerContainer {
+        handlers: FrameworkHandler
+        ServerContainer new(List<RequestHandler> handlers)
+        void start()
+        void stop()
+    }
+    ServerContainer -- AnnotationProcessing.RequestHandler : uses
+    ServerContainer *-- FrameworkHandler
+}
+
+@enduml
+

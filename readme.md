@@ -6,7 +6,7 @@ A majority of developers in the JVM world work on various web applications, most
 However, some people state that frameworks produce too an big overhead.
 I decided to see how valid such claims are and how much work is necessary to replicate what frameworks provide us out-of-the-box.
 
-This article isn’t about whether or not it is feasible to use a framework or when to use it. 
+This text isn’t about whether or not it is feasible to use a framework or when to use it. 
 It is about writing your framework - tinkering is the best way of learning!
 
 For the sake of simplicity, we will use a demo app code.
@@ -207,7 +207,7 @@ For the sake of simplicity, we would assume the framework:
 
 The annotation processing approach is powerful and offers many ways to achieve the goal. 
 Therefore, the design is the point where we should start.
-We will begin with a basic version, which we will develop gradually as the article develops.
+We will begin with a basic version, which we will develop gradually as the text develops.
 
 The diagram below shows the high-level architecture of the desired solution.
 
@@ -285,7 +285,7 @@ class BeanProcessor extends AbstractProcessor {
 Our processor will extend the provided *AbstractProcessor* instead of fully implementing the *Processor* interface.
 
 The [actual implementation](/framework/src/main/java/io/jd/framework/processor/BeanProcessor.java) differs from what you are seeing. 
-Don't worry; it will be used to the full extent in the next **step** of the article. 
+Don't worry; it will be used to the full extent in the next **step** of the text. 
 The simplified version shown here is enough to do the actual DI work.
 
 ##### Step 2 - add annotations!?
@@ -746,7 +746,7 @@ The other option is to utilise the [compile-testing](https://github.com/google/c
 Google. It simplifies the testing process, even though the tool isn't perfect. Please find the
 tutorial on how to use it [here](https://chermehdi.com/posts/compiler-testing-tutorial/).
 
-I introduced both approaches in the article's repository. The *compile-testing* was used for "unit
+I introduced both approaches in the text's repository. The *compile-testing* was used for "unit
 tests", and *integrationTest* module was used for "integration tests".
 
 You can find the test implementation and configuration in the *framework* subproject's files below:
@@ -1407,7 +1407,7 @@ As you can see:
 
 ### Implementation of the *ProcessorPlugin* for the *TransactionalPlugin*
 
-In the main part of the article, I omitted some code of the *TransactionalPlugin* related to the *ProcessorPlugin* implementation.
+In the main part of the text, I omitted some code of the *TransactionalPlugin* related to the *ProcessorPlugin* implementation.
 Now, you can see the missing parts of the code below.
 
 ```java
@@ -1538,7 +1538,7 @@ The three main Java app frameworks provide support for creating controllers thro
 
 ### What are we going to build?
 
-Let me show you what we will achieve in the article.
+Let me show you what we will achieve in the text.
 
 A REST controller is a web application component that handles HTTP requests and responses using the REST architectural style.
 

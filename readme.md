@@ -9,7 +9,16 @@ I decided to see how valid such claims are and how much work is necessary to rep
 This text isn’t about whether or not it is feasible to use a framework or when to use it. 
 It is about writing your framework - tinkering is the best way of learning!
 
-For the sake of simplicity, we will use a demo app code.
+PS. The readme is also available in the form of three articles:
+
+1. [Start and Dependency Injection](https://medium.com/p/9824be4fb9a7)
+2. [Transactional](https://medium.com/p/d2d6aa5c63a1)
+3. *Web and controllers* - will be available in the future.
+
+
+## Part 1 - No framework
+
+For the sake of simplicity, we will use a demo app code for the first part.
 The application consists of
 
 * Singular service
